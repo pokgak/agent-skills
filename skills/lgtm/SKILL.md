@@ -210,16 +210,26 @@ lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 
 **DO NOT run observability queries directly in the main conversation.** Raw JSON from logs, metrics, and traces will bloat context and degrade performance.
 
-**ALWAYS use the Task tool to spawn a subagent** that will:
-1. Execute the queries
-2. Process the results
-3. Return ONLY a concise summary
+### Orchestrator Pattern
+
+**Opus (main agent) = Orchestrator:**
+- Evaluates summaries returned by subagents
+- Decides what to investigate next
+- Crafts prompts for subsequent subagents
+- Synthesizes findings for the user
+- **NEVER executes queries directly**
+
+**Sonnet/Haiku (subagents) = Executors:**
+- Run the actual `lgtm` CLI commands
+- Process raw JSON results
+- Return concise summaries
+- **ALL query execution happens here**
 
 ### Subagent Configuration
 
 **REQUIRED settings for Task tool:**
 - `subagent_type: "general-purpose"` - Has access to Bash for running lgtm CLI
-- `model: "sonnet"` - Use Sonnet for cost/speed efficiency (NOT opus)
+- `model: "sonnet"` - Use Sonnet for query execution (NOT opus)
 
 **Example Task tool call:**
 ```
@@ -229,16 +239,15 @@ Task tool parameters:
   prompt: "<your investigation prompt>"
 ```
 
-### When to Use Which Model
+### Model Selection
 
-| Query Type | Model | Reason |
-|------------|-------|--------|
-| Single metric/label lookup | `haiku` | Simple fetch, minimal processing |
-| Log analysis, error investigation | `sonnet` | Good summarization, cost-effective |
-| Multi-service correlation | `sonnet` | Handles complexity well |
-| Complex root cause analysis | `opus` | Only if sonnet insufficient |
+| Role | Model | Purpose |
+|------|-------|---------|
+| Orchestrator (main) | `opus` | Evaluate results, plan next steps, synthesize findings |
+| Query execution | `sonnet` | Run queries, analyze logs/metrics/traces, summarize |
+| Simple lookups | `haiku` | Fetch labels, single metric values |
 
-**Default to `sonnet` for all observability tasks.**
+**Opus should NEVER run queries directly. Always delegate to sonnet/haiku subagents.**
 
 ### Example Prompts for Subagents
 
