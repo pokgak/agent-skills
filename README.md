@@ -1,8 +1,8 @@
 # LGTM Skill
 
-Claude Code skill for querying observability backends: Loki (logs), Prometheus/Mimir (metrics), and Tempo (traces).
+Claude Code skill and CLI for querying observability backends: Loki (logs), Prometheus/Mimir (metrics), and Tempo (traces).
 
-## Installation
+## Skill Installation
 
 ```bash
 npx skills add pokgak/skills-lgtm
@@ -12,6 +12,39 @@ Or manually copy to your Claude skills directory:
 
 ```bash
 cp -r skills/lgtm ~/.claude/skills/
+```
+
+## CLI Installation
+
+The skill includes a lightweight CLI with built-in best practices (sensible defaults for time ranges and limits).
+
+**Requires Python 3.12+**
+
+```bash
+# Install globally with uv
+uv tool install git+https://github.com/pokgak/skills-lgtm
+
+# Or run directly without installing
+uvx --from git+https://github.com/pokgak/skills-lgtm lgtm --help
+```
+
+### CLI Usage
+
+```bash
+# List configured instances
+lgtm instances
+
+# Query Loki logs (defaults: last 15 min, limit 50)
+lgtm loki query '{app="myapp"} |= "error"'
+
+# Query Prometheus metrics
+lgtm prom query 'rate(http_requests_total[5m])'
+
+# Search Tempo traces (defaults: last 15 min, limit 20)
+lgtm tempo search -q '{resource.service.name="api"}'
+
+# Use specific instance
+lgtm -i production loki labels
 ```
 
 ## Configuration
@@ -34,13 +67,7 @@ instances:
 
 See [config.example.yaml](skills/lgtm/config.example.yaml) for more examples including authentication.
 
-### Config File Location
-
-The skill looks for configuration at: `~/.config/lgtm/config.yaml`
-
 ### Authentication
-
-The skill supports three authentication methods:
 
 | Config Fields | Auth Type | Description |
 |---------------|-----------|-------------|
@@ -74,9 +101,35 @@ instances:
 
 Config values with `${VAR_NAME}` syntax are expanded from environment variables at runtime.
 
-## Usage
+## Built-in Best Practices
 
-Once installed, the skill activates when you ask Claude about logs, metrics, traces, or debugging production issues.
+The CLI encodes best practices to minimize token/context usage:
+
+- **Default time range:** 15 minutes (not hours/days)
+- **Default limits:** 50 for logs, 20 for traces
+- **Discovery commands:** Always available to explore labels/metrics/tags first
+
+### Recommended Workflow
+
+1. **Discover** what's available:
+   ```bash
+   lgtm loki labels
+   lgtm loki label-values app
+   ```
+
+2. **Aggregate** to get overview:
+   ```bash
+   lgtm loki instant 'sum by (app) (count_over_time({namespace="prod"} |= "error" [15m]))'
+   ```
+
+3. **Drill down** to specifics:
+   ```bash
+   lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
+   ```
+
+## Skill Usage
+
+Once the skill is installed, it activates when you ask Claude about logs, metrics, traces, or debugging production issues.
 
 Example prompts:
 - "Show me error logs from the api service in the last 15 minutes"
@@ -86,7 +139,6 @@ Example prompts:
 
 ## Query Language References
 
-The skill includes syntax references for:
 - [LogQL](skills/lgtm/reference/logql.md) - Loki query language
 - [PromQL](skills/lgtm/reference/promql.md) - Prometheus query language
 - [TraceQL](skills/lgtm/reference/traceql.md) - Tempo query language

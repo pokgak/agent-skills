@@ -7,19 +7,25 @@ license: MIT
 
 # LGTM Skill - Query Observability Backends
 
-Query Loki (logs), Prometheus/Mimir (metrics), and Tempo (traces) using curl.
+Query Loki (logs), Prometheus/Mimir (metrics), and Tempo (traces) using the `lgtm` CLI.
+
+## Prerequisites
+
+Install the CLI (requires Python 3.12+):
+
+```bash
+uv tool install git+https://github.com/pokgak/skills-lgtm
+```
+
+Or run directly without installing:
+
+```bash
+uvx --from git+https://github.com/pokgak/skills-lgtm lgtm --help
+```
 
 ## Configuration
 
 **Config file location:** `~/.config/lgtm/config.yaml`
-
-Read the config file first to get instance URLs and authentication:
-
-```bash
-cat ~/.config/lgtm/config.yaml
-```
-
-### Config Format
 
 ```yaml
 version: "1"
@@ -35,408 +41,189 @@ instances:
       url: "http://localhost:3200"
 ```
 
-### Environment Variable Expansion
+Authentication is handled automatically based on config:
+- `token` only → Bearer auth
+- `username` + `token` → Basic auth
+- `headers` → Custom headers (e.g., `X-Scope-OrgID` for multi-tenant)
 
-Config values like `${VAR_NAME}` should be expanded. When constructing curl commands, use the actual environment variable:
+Environment variables like `${LOKI_TOKEN}` are expanded automatically.
 
-```bash
-# If config has token: "${LOKI_TOKEN}"
-curl -H "Authorization: Bearer $LOKI_TOKEN" ...
-```
+## Built-in Best Practices
 
-## Authentication
+The CLI has sensible defaults to minimize token usage:
+- **Default time range:** 15 minutes (not hours/days)
+- **Default limits:** 50 for logs, 20 for traces
+- **Always use discovery commands first** to understand available labels/metrics/tags
 
-Construct auth headers based on config:
+## Loki (Logs)
 
-| Config Fields | Auth Type | curl Flag |
-|---------------|-----------|-----------|
-| `token` only | Bearer | `-H "Authorization: Bearer $TOKEN"` |
-| `username` + `token` | Basic | `-u "$USERNAME:$TOKEN"` |
-| `headers` | Custom | `-H "Header-Name: value"` for each |
-
-## Instance Selection
-
-1. User specifies instance → use that instance
-2. No specification → use `default_instance` from config
-3. No default → use first instance
-
-## Best Practices (Minimize Token Usage)
-
-Observability queries can return massive amounts of data. Follow these practices to keep context size manageable:
-
-### 1. Discover Before Querying
-
-**Always start with metadata discovery** to understand what's available:
+### Discovery First
 
 ```bash
-# Loki: What labels exist?
-curl "$LOKI_URL/loki/api/v1/labels" | jq '.data[]'
+# What labels exist?
+lgtm loki labels
 
-# Loki: What values for a label?
-curl "$LOKI_URL/loki/api/v1/label/app/values" | jq '.data[]'
-
-# Prometheus: What metrics exist?
-curl "$PROM_URL/api/v1/label/__name__/values" | jq '.data[]'
-
-# Tempo: What services/tags exist?
-curl "$TEMPO_URL/api/search/tags" | jq '.tagNames[]'
-curl "$TEMPO_URL/api/search/tag/service.name/values" | jq '.tagValues[]'
+# What values for a label?
+lgtm loki label-values app
+lgtm loki label-values namespace
 ```
 
-### 2. Use Narrow Time Ranges
-
-**Start with the smallest reasonable time window:**
-
-| Scenario | Recommended Range |
-|----------|-------------------|
-| Recent issue | Last 15-30 minutes |
-| Known incident time | ±15 minutes around incident |
-| General exploration | Last 1 hour max |
-| Historical analysis | Only expand if needed |
+### Query Logs
 
 ```bash
-# BAD: Querying 24 hours of logs
---data-urlencode "start=$(date -u -v-24H +%Y-%m-%dT%H:%M:%SZ)"
+# Basic query (defaults: last 15 min, limit 50)
+lgtm loki query '{app="myapp"}'
 
-# GOOD: Start with 15 minutes
---data-urlencode "start=$(date -u -v-15M +%Y-%m-%dT%H:%M:%SZ)"
+# Filter for errors
+lgtm loki query '{app="myapp"} |= "error"'
+
+# With custom time range and limit
+lgtm loki query '{app="myapp"}' --start 2024-01-15T10:00:00Z --end 2024-01-15T11:00:00Z --limit 100
 ```
 
-### 3. Filter Aggressively
-
-**Add as many filters as possible to reduce result size:**
-
-```logql
-# BAD: Broad query
-{namespace="production"}
-
-# GOOD: Specific filters
-{namespace="production", app="api", pod=~"api-server-.*"} |= "error" | json | level="error"
-```
-
-```promql
-# BAD: All series
-http_requests_total
-
-# GOOD: Filtered
-http_requests_total{job="api", status=~"5.."}
-```
-
-```traceql
-# BAD: All traces
-{ }
-
-# GOOD: Specific service and condition
-{ resource.service.name = "checkout" && status = error && duration > 1s }
-```
-
-### 4. Use Known Identifiers
-
-**When investigating specific issues, filter by ID immediately:**
+### Metric Queries (Aggregations)
 
 ```bash
-# If you have a trace ID, fetch it directly
-curl "$TEMPO_URL/api/traces/abc123def456"
+# Count errors - use this to get overview first
+lgtm loki instant 'count_over_time({app="myapp"} |= "error" [5m])'
 
-# If you have a request ID, filter logs by it
-{app="api"} |= "request_id=abc123"
-
-# If you have a pod name
-{pod="api-server-xyz123"}
+# Errors by level
+lgtm loki instant 'sum by (level) (count_over_time({app="myapp"} | json [5m]))'
 ```
 
-### 5. Limit Results
+## Prometheus/Mimir (Metrics)
 
-**Always set reasonable limits:**
+### Discovery First
 
 ```bash
-# Loki: limit parameter
---data-urlencode "limit=50"    # Default can be 1000+
+# What labels exist?
+lgtm prom labels
 
-# Tempo: limit parameter
---data-urlencode "limit=20"
+# What metrics exist?
+lgtm prom label-values __name__
 
-# Prometheus: use topk/bottomk
-topk(10, sum by (pod) (rate(http_requests_total[5m])))
+# Metric metadata
+lgtm prom metadata --metric http_requests_total
 ```
 
-### 6. Use Aggregations Over Raw Data
-
-**Prefer aggregated metrics over raw logs/traces:**
+### Query Metrics
 
 ```bash
-# BAD: Fetching all error logs
-{app="api"} |= "error"
+# Instant query
+lgtm prom query 'up{job="prometheus"}'
 
-# GOOD: Count errors first, then drill down if needed
-count_over_time({app="api"} |= "error" [5m])
-sum by (level) (count_over_time({app="api"} | json [5m]))
+# Rate of requests
+lgtm prom query 'rate(http_requests_total[5m])'
+
+# Range query (defaults: last 15 min, 60s step)
+lgtm prom range 'rate(http_requests_total[5m])'
+
+# Custom time range
+lgtm prom range 'up' --start 2024-01-15T10:00:00Z --end 2024-01-15T11:00:00Z --step 5m
 ```
 
-### 7. Progressive Refinement
+## Tempo (Traces)
 
-**Query in stages, narrowing down each time:**
-
-1. **Get overview**: Use aggregations to identify problem areas
-2. **Narrow scope**: Filter to specific service/pod/time
-3. **Get details**: Fetch specific logs/traces only when needed
-
-Example workflow:
-```bash
-# Step 1: Which services have errors?
-sum by (app) (count_over_time({namespace="prod"} |= "error" [15m]))
-
-# Step 2: Found "checkout" has errors, narrow down
-{namespace="prod", app="checkout"} |= "error" | json | line_format "{{.message}}"
-
-# Step 3: Get specific trace for investigation
-curl "$TEMPO_URL/api/traces/<traceID>"
-```
-
-### 8. Extract Only What You Need
-
-**Use jq to filter response data:**
+### Discovery First
 
 ```bash
-# Extract only log lines, not metadata
-jq -r '.data.result[].values[][] | select(type == "string")'
+# What tags exist?
+lgtm tempo tags
 
-# Extract only trace IDs and durations
-jq '.traces[] | {traceID, durationMs}'
-
-# Get just metric names
-jq -r '.data.result[].metric.__name__' | sort -u
-```
-
-## Loki API (Logs)
-
-Base URL from config: `instances.<name>.loki.url`
-
-### Query Logs (Range Query)
-
-```bash
-curl -G "$LOKI_URL/loki/api/v1/query_range" \
-  --data-urlencode 'query={app="myapp"} |= "error"' \
-  --data-urlencode "start=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ)" \
-  --data-urlencode "end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --data-urlencode "limit=100" \
-  | jq '.data.result[].values[] | .[1]'
-```
-
-### Instant Query
-
-```bash
-curl -G "$LOKI_URL/loki/api/v1/query" \
-  --data-urlencode 'query=count_over_time({app="myapp"}[5m])' \
-  | jq '.data.result'
-```
-
-### Get Labels
-
-```bash
-curl "$LOKI_URL/loki/api/v1/labels" | jq '.data[]'
-```
-
-### Get Label Values
-
-```bash
-curl "$LOKI_URL/loki/api/v1/label/app/values" | jq '.data[]'
-```
-
-### Get Series
-
-```bash
-curl -G "$LOKI_URL/loki/api/v1/series" \
-  --data-urlencode 'match[]={app="myapp"}' \
-  | jq '.data[]'
-```
-
-## Prometheus/Mimir API (Metrics)
-
-Base URL from config: `instances.<name>.prometheus.url`
-
-### Instant Query
-
-```bash
-curl -G "$PROM_URL/api/v1/query" \
-  --data-urlencode 'query=up{job="prometheus"}' \
-  | jq '.data.result[] | {metric: .metric, value: .value[1]}'
-```
-
-### Range Query
-
-```bash
-curl -G "$PROM_URL/api/v1/query_range" \
-  --data-urlencode 'query=rate(http_requests_total[5m])' \
-  --data-urlencode "start=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ)" \
-  --data-urlencode "end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --data-urlencode "step=60" \
-  | jq '.data.result'
-```
-
-### Get Labels
-
-```bash
-curl "$PROM_URL/api/v1/labels" | jq '.data[]'
-```
-
-### Get Label Values
-
-```bash
-curl "$PROM_URL/api/v1/label/job/values" | jq '.data[]'
-```
-
-### Get Metric Metadata
-
-```bash
-curl "$PROM_URL/api/v1/metadata" | jq 'keys[]'
-```
-
-### Get Series
-
-```bash
-curl -G "$PROM_URL/api/v1/series" \
-  --data-urlencode 'match[]=up' \
-  | jq '.data[]'
-```
-
-## Tempo API (Traces)
-
-Base URL from config: `instances.<name>.tempo.url`
-
-### Get Trace by ID
-
-```bash
-curl "$TEMPO_URL/api/traces/<traceID>" | jq '.'
+# What services?
+lgtm tempo tag-values service.name
 ```
 
 ### Search Traces
 
 ```bash
-curl -G "$TEMPO_URL/api/search" \
-  --data-urlencode 'q={resource.service.name="myservice"}' \
-  --data-urlencode "start=$(date -u -v-1H +%s)" \
-  --data-urlencode "end=$(date -u +%s)" \
-  | jq '.traces[] | {traceID, rootServiceName, startTimeUnixNano, durationMs}'
+# Search by service (defaults: last 15 min, limit 20)
+lgtm tempo search -q '{resource.service.name="api"}'
+
+# Error traces
+lgtm tempo search -q '{status=error}'
+
+# Slow traces
+lgtm tempo search --min-duration 1s
+
+# Combined filters
+lgtm tempo search -q '{resource.service.name="api" && status=error}' --min-duration 500ms
 ```
 
-### Search with Duration Filter
+### Get Specific Trace
 
 ```bash
-curl -G "$TEMPO_URL/api/search" \
-  --data-urlencode 'q={duration > 100ms}' \
-  --data-urlencode 'minDuration=100ms' \
-  | jq '.traces[]'
+# When you have a trace ID
+lgtm tempo trace abc123def456
 ```
 
-### Get Tags
+## Instance Selection
 
 ```bash
-curl "$TEMPO_URL/api/search/tags" | jq '.tagNames[]'
+# Use specific instance
+lgtm -i production loki query '{app="api"}'
+
+# List configured instances
+lgtm instances
 ```
 
-### Get Tag Values
+## Best Practices Workflow
+
+### 1. Discover → Filter → Query
 
 ```bash
-curl "$TEMPO_URL/api/search/tag/service.name/values" | jq '.tagValues[]'
+# Step 1: What's available?
+lgtm loki labels
+lgtm loki label-values app
+
+# Step 2: Get overview with aggregation
+lgtm loki instant 'sum by (app) (count_over_time({namespace="prod"} |= "error" [15m]))'
+
+# Step 3: Narrow down to specific app
+lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
 ```
 
-## Time Formats
-
-| Backend | Format | Example |
-|---------|--------|---------|
-| Loki | RFC3339 or Unix nano | `2024-01-15T10:00:00Z` |
-| Prometheus | RFC3339 or Unix seconds | `2024-01-15T10:00:00Z` |
-| Tempo | Unix seconds | `1705312800` |
-
-### Time Helpers (macOS)
+### 2. Use Specific Identifiers
 
 ```bash
-# Current time RFC3339
-date -u +%Y-%m-%dT%H:%M:%SZ
+# If you have a trace ID, fetch directly
+lgtm tempo trace abc123def456
 
-# 1 hour ago RFC3339
-date -u -v-1H +%Y-%m-%dT%H:%M:%SZ
+# Filter logs by request ID
+lgtm loki query '{app="api"} |= "request_id=abc123"'
 
-# 24 hours ago RFC3339
-date -u -v-24H +%Y-%m-%dT%H:%M:%SZ
-
-# Unix seconds
-date -u +%s
-
-# 1 hour ago Unix seconds
-date -u -v-1H +%s
+# Filter by pod name
+lgtm loki query '{pod="api-server-xyz123"}'
 ```
 
-### Time Helpers (Linux)
+### 3. Aggregations Over Raw Data
 
 ```bash
-# Current time RFC3339
-date -u +%Y-%m-%dT%H:%M:%SZ
+# BAD: Fetching all error logs
+lgtm loki query '{app="api"} |= "error"'
 
-# 1 hour ago RFC3339
-date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ
-
-# Unix seconds
-date -u +%s
-
-# 1 hour ago Unix seconds
-date -u -d '1 hour ago' +%s
+# GOOD: Count first, then drill down
+lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 ```
 
 ## Output Formatting
 
-### Pretty Print Logs
+All commands output JSON. Use `jq` for formatting:
 
 ```bash
-# Extract just log lines from Loki
-jq -r '.data.result[].values[][] | select(type == "string")'
+# Extract just log lines
+lgtm loki query '{app="api"}' | jq -r '.data.result[].values[][] | select(type == "string")'
 
-# With timestamps
-jq -r '.data.result[].values[] | "\(.[0] | tonumber / 1000000000 | strftime("%Y-%m-%d %H:%M:%S")) \(.[1])"'
+# Extract metric values
+lgtm prom query 'up' | jq -r '.data.result[] | "\(.metric.instance): \(.value[1])"'
+
+# Trace summary
+lgtm tempo search -q '{status=error}' | jq -r '.traces[] | "\(.traceID) | \(.rootServiceName) | \(.durationMs)ms"'
 ```
-
-### Format Metrics
-
-```bash
-# Simple value extraction
-jq -r '.data.result[] | "\(.metric.instance): \(.value[1])"'
-
-# Table format
-jq -r '.data.result[] | [.metric.job, .metric.instance, .value[1]] | @tsv'
-```
-
-### Format Traces
-
-```bash
-# Summary of traces
-jq -r '.traces[] | "\(.traceID) | \(.rootServiceName) | \(.durationMs)ms"'
-```
-
-## Error Handling
-
-Always check response status:
-
-```bash
-response=$(curl -s -w "\n%{http_code}" "$URL")
-body=$(echo "$response" | head -n -1)
-status=$(echo "$response" | tail -n 1)
-
-if [ "$status" != "200" ]; then
-  echo "Error: HTTP $status"
-  echo "$body" | jq '.message // .error // .'
-fi
-```
-
-Common errors:
-- 401: Authentication failed - check token/credentials
-- 400: Bad query syntax - check LogQL/PromQL/TraceQL
-- 404: Endpoint not found - check URL configuration
-- 500: Server error - check backend logs
 
 ## Reference
 
-For query syntax reference, see:
+For query syntax, see:
 - `reference/logql.md` - LogQL syntax for Loki
 - `reference/promql.md` - PromQL syntax for Prometheus
 - `reference/traceql.md` - TraceQL syntax for Tempo
