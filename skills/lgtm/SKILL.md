@@ -1,61 +1,51 @@
 ---
 name: lgtm
-description: Query observability backends (Loki logs, Prometheus metrics, Tempo traces). Use when user asks about logs, metrics, traces, or debugging production issues.
-allowed-tools: Bash, Read, Glob
+description: Query observability backends (Loki logs, Prometheus metrics, Tempo traces). Use when user asks about logs, metrics, traces, or debugging production issues. IMPORTANT - Always use subagents with model sonnet to execute queries, never run queries directly.
+allowed-tools: Bash, Read, Glob, Task
 license: MIT
 ---
 
 # LGTM Skill - Query Observability Backends
 
-Query Loki (logs), Prometheus/Mimir (metrics), and Tempo (traces) using the `lgtm` CLI.
+## ⚠️ CRITICAL: DO NOT RUN QUERIES DIRECTLY
 
-## Prerequisites
+**STOP. Before running ANY lgtm command, you MUST spawn a subagent.**
 
-Install the CLI (requires Python 3.12+):
+Never run `lgtm loki query`, `lgtm prom query`, or `lgtm tempo search` directly in the main conversation. Raw JSON responses will bloat context and degrade performance.
 
-```bash
-uv tool install git+https://github.com/pokgak/skills-lgtm
+**ALWAYS use this pattern:**
+
+```
+Task tool call:
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  prompt: "Using lgtm CLI, <your investigation task>. Return ONLY a concise summary."
 ```
 
-Or run directly without installing:
+**Orchestrator pattern:**
+- **Opus (you)**: Evaluate summaries, decide next steps, synthesize findings. NEVER execute queries.
+- **Sonnet subagent**: Execute queries, process raw JSON, return summaries. ALL queries run here.
 
+**Run independent queries in parallel** - spawn multiple Task calls in one message when queries don't depend on each other.
+
+---
+
+## CLI Reference (FOR SUBAGENTS ONLY)
+
+The following commands are for subagents to execute, NOT for direct use in main conversation.
+
+### Prerequisites
+
+The CLI should be available via:
 ```bash
 uvx --from git+https://github.com/pokgak/skills-lgtm lgtm --help
 ```
 
-## Configuration
+### Configuration
 
-**Config file location:** `~/.config/lgtm/config.yaml`
+Config file: `~/.config/lgtm/config.yaml`
 
-```yaml
-version: "1"
-default_instance: "local"
-
-instances:
-  local:
-    loki:
-      url: "http://localhost:3100"
-    prometheus:
-      url: "http://localhost:9090"
-    tempo:
-      url: "http://localhost:3200"
-```
-
-Authentication is handled automatically based on config:
-- `token` only → Bearer auth
-- `username` + `token` → Basic auth
-- `headers` → Custom headers (e.g., `X-Scope-OrgID` for multi-tenant)
-
-Environment variables like `${LOKI_TOKEN}` are expanded automatically.
-
-## Built-in Best Practices
-
-The CLI has sensible defaults to minimize token usage:
-- **Default time range:** 15 minutes (not hours/days)
-- **Default limits:** 50 for logs, 20 for traces
-- **Always use discovery commands first** to understand available labels/metrics/tags
-
-## Loki (Logs)
+### Loki (Logs)
 
 ### Discovery First
 
@@ -206,90 +196,7 @@ lgtm loki query '{app="api"} |= "error"'
 lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 ```
 
-## IMPORTANT: Always Use Subagents for Queries
-
-**DO NOT run observability queries directly in the main conversation.** Raw JSON from logs, metrics, and traces will bloat context and degrade performance.
-
-### Orchestrator Pattern
-
-**Opus (main agent) = Orchestrator:**
-- Evaluates summaries returned by subagents
-- Decides what to investigate next
-- Crafts prompts for subsequent subagents
-- Synthesizes findings for the user
-- **NEVER executes queries directly**
-
-**Sonnet/Haiku (subagents) = Executors:**
-- Run the actual `lgtm` CLI commands
-- Process raw JSON results
-- Return concise summaries
-- **ALL query execution happens here**
-
-### Subagent Configuration
-
-**REQUIRED settings for Task tool:**
-- `subagent_type: "general-purpose"` - Has access to Bash for running lgtm CLI
-- `model: "sonnet"` - Use Sonnet for query execution (NOT opus)
-
-**Example Task tool call:**
-```
-Task tool parameters:
-  subagent_type: "general-purpose"
-  model: "sonnet"
-  prompt: "<your investigation prompt>"
-```
-
-### Model Selection
-
-| Role | Model | Purpose |
-|------|-------|---------|
-| Orchestrator (main) | `opus` | Evaluate results, plan next steps, synthesize findings |
-| Query execution | `sonnet` | Run queries, analyze logs/metrics/traces, summarize |
-| Simple lookups | `haiku` | Fetch labels, single metric values |
-
-**Opus should NEVER run queries directly. Always delegate to sonnet/haiku subagents.**
-
-### Run Subagents in Parallel
-
-Subagent spawning adds latency. To speed up investigations, **spawn multiple independent subagents in a single message** when queries don't depend on each other.
-
-**Example: Parallel investigation across logs, metrics, and traces**
-
-In ONE message, call Task tool THREE times:
-
-```
-# Subagent 1: Check logs
-Task(subagent_type="general-purpose", model="sonnet", prompt="
-  Check error logs for checkout service using lgtm CLI.
-  Return: error count, top 3 error messages, affected pods.
-")
-
-# Subagent 2: Check metrics
-Task(subagent_type="general-purpose", model="sonnet", prompt="
-  Check checkout service metrics using lgtm CLI.
-  Return: request rate, error rate, p95 latency.
-")
-
-# Subagent 3: Check traces
-Task(subagent_type="general-purpose", model="sonnet", prompt="
-  Search for error traces in checkout service using lgtm CLI.
-  Return: count of error traces, slowest trace ID, common failure points.
-")
-```
-
-All three run concurrently. Opus waits for all results, then correlates findings.
-
-**When to parallelize:**
-- Checking logs AND metrics AND traces for the same service
-- Investigating multiple services independently
-- Fetching labels/metadata from different backends
-
-**When to run sequentially:**
-- Need trace ID from logs before fetching trace details
-- Need to identify problematic service before deep-diving
-- Each step depends on previous results
-
-### Example Prompts for Subagents
+## Subagent Prompt Examples
 
 **Example: Investigate Error Spike**
 
