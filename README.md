@@ -137,39 +137,6 @@ Example prompts:
 - "Find slow traces over 1 second from the payment service"
 - "Check if there are any 5xx errors in production"
 
-## Orchestrator Pattern (Context Efficiency)
-
-The skill uses a two-phase subagent pattern to keep Opus context lean:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  OPUS (Orchestrator)                                    │
-│  - Evaluates summaries from subagents                   │
-│  - Decides what to investigate next                     │
-│  - Synthesizes findings for user                        │
-│  - NEVER executes queries directly                      │
-└─────────────────────────────────────────────────────────┘
-         │                              │
-         ▼                              ▼
-┌─────────────────┐          ┌─────────────────────────────┐
-│ Phase 1: HAIKU  │          │ Phase 2: SONNET (parallel)  │
-│ Discovery       │    ──►   │ Investigation               │
-│ - Labels        │          │ - Log queries               │
-│ - Services      │          │ - Trace analysis            │
-│ - Namespaces    │          │ - Metric queries            │
-└─────────────────┘          └─────────────────────────────┘
-```
-
-**Validated results:**
-
-| Metric | Without Pattern | With Pattern |
-|--------|-----------------|--------------|
-| Opus context usage | 50-100k tokens | 34k tokens (17%) |
-| Raw JSON in main context | Yes | No |
-| Parallel investigation | No | Yes |
-
-The pattern keeps raw observability data in disposable subagent contexts while Opus only sees concise summaries.
-
 ## Query Language References
 
 - [LogQL](skills/lgtm/reference/logql.md) - Loki query language
