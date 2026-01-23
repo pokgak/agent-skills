@@ -206,24 +206,45 @@ lgtm loki query '{app="api"} |= "error"'
 lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 ```
 
-### 4. Use Subagents for Large Investigations
+## IMPORTANT: Always Use Subagents for Queries
 
-For complex queries that may return large results, spawn a subagent to fetch and summarize data. This keeps the main conversation context clean.
+**DO NOT run observability queries directly in the main conversation.** Raw JSON from logs, metrics, and traces will bloat context and degrade performance.
 
-**When to use subagents:**
-- Investigating incidents across multiple services
-- Queries that may return many results
-- Correlating logs, metrics, and traces together
-- When you need analysis, not raw data
+**ALWAYS use the Task tool to spawn a subagent** that will:
+1. Execute the queries
+2. Process the results
+3. Return ONLY a concise summary
 
-**Model selection for subagents:**
-- Use `model: "haiku"` for simple fetches (labels, single queries)
-- Use `model: "sonnet"` for analysis and summarization (recommended for most cases)
-- Use `model: "opus"` only for complex multi-step investigations
+### Subagent Configuration
+
+**REQUIRED settings for Task tool:**
+- `subagent_type: "general-purpose"` - Has access to Bash for running lgtm CLI
+- `model: "sonnet"` - Use Sonnet for cost/speed efficiency (NOT opus)
+
+**Example Task tool call:**
+```
+Task tool parameters:
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  prompt: "<your investigation prompt>"
+```
+
+### When to Use Which Model
+
+| Query Type | Model | Reason |
+|------------|-------|--------|
+| Single metric/label lookup | `haiku` | Simple fetch, minimal processing |
+| Log analysis, error investigation | `sonnet` | Good summarization, cost-effective |
+| Multi-service correlation | `sonnet` | Handles complexity well |
+| Complex root cause analysis | `opus` | Only if sonnet insufficient |
+
+**Default to `sonnet` for all observability tasks.**
+
+### Example Prompts for Subagents
 
 **Example: Investigate Error Spike**
 
-Spawn an Explore agent with `model: "sonnet"` and this prompt:
+Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 ```
 Investigate errors in the checkout service over the last hour using the lgtm CLI.
 
@@ -243,7 +264,7 @@ Return ONLY the summary, not raw JSON output.
 
 **Example: Service Health Check**
 
-Spawn an Explore agent with `model: "sonnet"` and this prompt:
+Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 ```
 Check health of the payment-service using lgtm CLI.
 
@@ -260,7 +281,7 @@ Return a brief health summary:
 
 **Example: Trace Investigation**
 
-Spawn an Explore agent with `model: "sonnet"` and this prompt:
+Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 ```
 Investigate slow requests in the API gateway using lgtm CLI.
 
@@ -274,7 +295,7 @@ Summarize:
 - Common patterns in slow requests
 ```
 
-The subagent processes raw data and returns only actionable insights, dramatically reducing context usage.
+**NEVER paste raw JSON output into the main conversation.** The subagent processes all data and returns only a concise summary. This is critical for maintaining context efficiency.
 
 ## Output Formatting
 
