@@ -11,22 +11,47 @@ license: MIT
 
 **STOP. Before running ANY lgtm command, you MUST spawn a subagent.**
 
-Never run `lgtm loki query`, `lgtm prom query`, or `lgtm tempo search` directly in the main conversation. Raw JSON responses will bloat context and degrade performance.
+Never run `lgtm` commands directly in the main conversation. Raw JSON responses will bloat context.
 
-**ALWAYS use this pattern:**
+### Required Two-Phase Approach
+
+**Phase 1: DISCOVERY (haiku subagent)**
+
+First, discover what's available before querying blindly:
+
+```
+Task tool call:
+  subagent_type: "general-purpose"
+  model: "haiku"
+  prompt: "Using lgtm CLI, discover available labels and services.
+    Run: lgtm loki labels
+    Run: lgtm loki label-values app
+    Run: lgtm loki label-values namespace
+    Return: list of available apps, namespaces, and other relevant labels."
+```
+
+**Phase 2: INVESTIGATION (sonnet subagent)**
+
+After discovery, query with specific filters:
 
 ```
 Task tool call:
   subagent_type: "general-purpose"
   model: "sonnet"
-  prompt: "Using lgtm CLI, <your investigation task>. Return ONLY a concise summary."
+  prompt: "Using lgtm CLI, investigate errors in the checkout app in prod namespace.
+    <specific queries based on discovery results>
+    Return ONLY a concise summary."
 ```
 
-**Orchestrator pattern:**
-- **Opus (you)**: Evaluate summaries, decide next steps, synthesize findings. NEVER execute queries.
-- **Sonnet subagent**: Execute queries, process raw JSON, return summaries. ALL queries run here.
+### Orchestrator Pattern
 
-**Run independent queries in parallel** - spawn multiple Task calls in one message when queries don't depend on each other.
+- **Opus (you)**: Coordinate discovery → investigation flow. Evaluate summaries, decide next steps. NEVER execute queries.
+- **Haiku subagent**: Fast discovery - labels, metrics, tags. Returns what's available.
+- **Sonnet subagent**: Deep investigation - log queries, trace analysis. Returns summarized findings.
+
+### Parallel Execution
+
+Run independent queries in parallel - spawn multiple Task calls in one message when queries don't depend on each other (e.g., check logs AND metrics AND traces simultaneously after discovery).
 
 ---
 
@@ -198,7 +223,25 @@ lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 
 ## Subagent Prompt Examples
 
-**Example: Investigate Error Spike**
+**Example: Discovery (run this FIRST)**
+
+Use Task tool with `subagent_type: "general-purpose"` and `model: "haiku"`:
+```
+Discover available observability data using lgtm CLI.
+
+1. Get Loki labels: lgtm loki labels
+2. Get app values: lgtm loki label-values app
+3. Get namespace values: lgtm loki label-values namespace
+4. Get Tempo services: lgtm tempo tag-values service.name
+
+Return a concise list:
+- Available apps: [list]
+- Available namespaces: [list]
+- Available services in traces: [list]
+- Any other relevant labels discovered
+```
+
+**Example: Investigate Error Spike (after discovery)**
 
 Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 ```
