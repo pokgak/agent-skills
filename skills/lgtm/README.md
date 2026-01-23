@@ -4,15 +4,7 @@ A skill for AI coding assistants to query observability backends: Loki (logs), P
 
 ## Overview
 
-This skill enables querying the Grafana LGTM stack using the `lgtm` CLI with built-in best practices for context efficiency. It uses the **orchestrator pattern** - spawning subagents to execute queries and return summaries, keeping raw JSON out of the main conversation.
-
-## Key Concepts
-
-- **Two-Phase Approach**: Discovery (haiku) → Investigation (sonnet)
-- **Orchestrator Pattern**: Opus coordinates, subagents execute queries
-- **Context Efficiency**: Raw JSON stays in subagent contexts, only summaries reach main conversation
-- **Parallel Execution**: Independent queries run concurrently
-- **Built-in Defaults**: 15 min time range, sensible limits
+This skill enables querying the Grafana LGTM stack using the `lgtm` CLI with built-in best practices for context efficiency.
 
 ## Structure
 
