@@ -2,6 +2,7 @@
 name: lgtm
 description: Query observability backends (Loki logs, Prometheus metrics, Tempo traces). Use when user asks about logs, metrics, traces, or debugging production issues.
 allowed-tools: Bash, Read, Glob
+license: MIT
 ---
 
 # LGTM Skill - Query Observability Backends
