@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "organization": "pokgak",
+  "date": "2025-01-23",
+  "abstract": "Query observability backends (Loki logs, Prometheus/Mimir metrics, Tempo traces) with built-in best practices for context efficiency using the orchestrator pattern.",
+  "references": [
+    "https://grafana.com/docs/loki/latest/query/",
+    "https://prometheus.io/docs/prometheus/latest/querying/basics/",
+    "https://grafana.com/docs/tempo/latest/traceql/"
+  ]
+}
