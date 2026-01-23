@@ -206,6 +206,71 @@ lgtm loki query '{app="api"} |= "error"'
 lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 ```
 
+### 4. Use Subagents for Large Investigations
+
+For complex queries that may return large results, spawn a subagent to fetch and summarize data. This keeps the main conversation context clean.
+
+**When to use subagents:**
+- Investigating incidents across multiple services
+- Queries that may return many results
+- Correlating logs, metrics, and traces together
+- When you need analysis, not raw data
+
+**Example: Investigate Error Spike**
+
+Spawn an Explore agent with this prompt:
+```
+Investigate errors in the checkout service over the last hour using the lgtm CLI.
+
+1. First get error counts: lgtm loki instant 'sum by (level) (count_over_time({app="checkout"} | json [1h]))'
+2. If errors found, get sample logs: lgtm loki query '{app="checkout"} |= "error"' --limit 30
+3. Check for related traces: lgtm tempo search -q '{resource.service.name="checkout" && status=error}'
+
+Summarize findings:
+- Total error count and trend (up/down from normal)
+- Top 3 most frequent error messages
+- When the errors started
+- Affected components/pods
+- Any correlated trace IDs for debugging
+
+Return ONLY the summary, not raw JSON output.
+```
+
+**Example: Service Health Check**
+
+Spawn an Explore agent with this prompt:
+```
+Check health of the payment-service using lgtm CLI.
+
+1. Error rate: lgtm loki instant 'sum(count_over_time({app="payment-service"} |= "error" [15m]))'
+2. Request latency: lgtm prom query 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service="payment"}[5m]))'
+3. Recent errors: lgtm loki query '{app="payment-service"} |= "error"' --limit 10
+
+Return a brief health summary:
+- Status: healthy/degraded/unhealthy
+- Error rate (errors per minute)
+- P95 latency
+- Any critical issues found
+```
+
+**Example: Trace Investigation**
+
+Spawn an Explore agent with this prompt:
+```
+Investigate slow requests in the API gateway using lgtm CLI.
+
+1. Find slow traces: lgtm tempo search -q '{resource.service.name="api-gateway"}' --min-duration 2s --limit 10
+2. For the slowest trace, get details: lgtm tempo trace <traceID>
+3. Check if downstream services are slow: lgtm tempo search -q '{resource.service.name="api-gateway"} >> {duration > 1s}'
+
+Summarize:
+- How many slow requests in the last 15 min
+- Which downstream service is causing delays
+- Common patterns in slow requests
+```
+
+The subagent processes raw data and returns only actionable insights, dramatically reducing context usage.
+
 ## Output Formatting
 
 All commands output JSON. Use `jq` for formatting:
