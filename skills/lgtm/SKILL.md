@@ -249,6 +249,46 @@ Task tool parameters:
 
 **Opus should NEVER run queries directly. Always delegate to sonnet/haiku subagents.**
 
+### Run Subagents in Parallel
+
+Subagent spawning adds latency. To speed up investigations, **spawn multiple independent subagents in a single message** when queries don't depend on each other.
+
+**Example: Parallel investigation across logs, metrics, and traces**
+
+In ONE message, call Task tool THREE times:
+
+```
+# Subagent 1: Check logs
+Task(subagent_type="general-purpose", model="sonnet", prompt="
+  Check error logs for checkout service using lgtm CLI.
+  Return: error count, top 3 error messages, affected pods.
+")
+
+# Subagent 2: Check metrics
+Task(subagent_type="general-purpose", model="sonnet", prompt="
+  Check checkout service metrics using lgtm CLI.
+  Return: request rate, error rate, p95 latency.
+")
+
+# Subagent 3: Check traces
+Task(subagent_type="general-purpose", model="sonnet", prompt="
+  Search for error traces in checkout service using lgtm CLI.
+  Return: count of error traces, slowest trace ID, common failure points.
+")
+```
+
+All three run concurrently. Opus waits for all results, then correlates findings.
+
+**When to parallelize:**
+- Checking logs AND metrics AND traces for the same service
+- Investigating multiple services independently
+- Fetching labels/metadata from different backends
+
+**When to run sequentially:**
+- Need trace ID from logs before fetching trace details
+- Need to identify problematic service before deep-diving
+- Each step depends on previous results
+
 ### Example Prompts for Subagents
 
 **Example: Investigate Error Spike**
