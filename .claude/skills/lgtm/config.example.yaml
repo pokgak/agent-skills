@@ -1,0 +1,78 @@
+# LGTM Skill Configuration
+# Place this file at: ~/.config/lgtm/config.yaml
+#
+# This format is compatible with lgtm-mcp for easy migration.
+
+version: "1"
+
+# Default instance to use when none specified
+default_instance: "local"
+
+instances:
+  # Local development instance (no authentication)
+  local:
+    loki:
+      url: "http://localhost:3100"
+    prometheus:
+      url: "http://localhost:9090"
+    tempo:
+      url: "http://localhost:3200"
+
+  # Grafana Cloud example (uses basic auth with API key)
+  # grafana-cloud:
+  #   loki:
+  #     url: "https://logs-prod-us-central1.grafana.net"
+  #     username: "${GRAFANA_CLOUD_USER}"    # Your Grafana Cloud user ID
+  #     token: "${GRAFANA_CLOUD_API_KEY}"    # API key from Grafana Cloud
+  #   prometheus:
+  #     url: "https://prometheus-prod-us-central1.grafana.net/api/prom"
+  #     username: "${GRAFANA_CLOUD_USER}"
+  #     token: "${GRAFANA_CLOUD_API_KEY}"
+  #   tempo:
+  #     url: "https://tempo-prod-us-central1.grafana.net"
+  #     username: "${GRAFANA_CLOUD_USER}"
+  #     token: "${GRAFANA_CLOUD_API_KEY}"
+
+  # Production example with bearer token auth
+  # production:
+  #   loki:
+  #     url: "https://loki.internal.example.com"
+  #     token: "${PROD_LOKI_TOKEN}"          # Bearer token
+  #   prometheus:
+  #     url: "https://mimir.internal.example.com"
+  #     token: "${PROD_MIMIR_TOKEN}"
+  #   tempo:
+  #     url: "https://tempo.internal.example.com"
+  #     token: "${PROD_TEMPO_TOKEN}"
+
+  # Multi-tenant example with custom headers
+  # multi-tenant:
+  #   loki:
+  #     url: "https://loki.shared.example.com"
+  #     token: "${SHARED_TOKEN}"
+  #     headers:
+  #       X-Scope-OrgID: "team-platform"     # Tenant identifier
+  #   prometheus:
+  #     url: "https://mimir.shared.example.com"
+  #     token: "${SHARED_TOKEN}"
+  #     headers:
+  #       X-Scope-OrgID: "team-platform"
+  #   tempo:
+  #     url: "https://tempo.shared.example.com"
+  #     token: "${SHARED_TOKEN}"
+  #     headers:
+  #       X-Scope-OrgID: "team-platform"
+
+  # AWS-hosted example with region-specific endpoints
+  # aws-prod:
+  #   loki:
+  #     url: "https://loki.us-east-1.example.com"
+  #     token: "${AWS_LOKI_TOKEN}"
+  #     headers:
+  #       X-AWS-Region: "us-east-1"
+  #   prometheus:
+  #     url: "https://aps.us-east-1.amazonaws.com/workspaces/ws-xxx"
+  #     # AWS SigV4 auth handled externally (e.g., via aws-vault)
+  #   tempo:
+  #     url: "https://tempo.us-east-1.example.com"
+  #     token: "${AWS_TEMPO_TOKEN}"
