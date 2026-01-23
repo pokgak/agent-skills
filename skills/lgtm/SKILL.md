@@ -216,9 +216,14 @@ For complex queries that may return large results, spawn a subagent to fetch and
 - Correlating logs, metrics, and traces together
 - When you need analysis, not raw data
 
+**Model selection for subagents:**
+- Use `model: "haiku"` for simple fetches (labels, single queries)
+- Use `model: "sonnet"` for analysis and summarization (recommended for most cases)
+- Use `model: "opus"` only for complex multi-step investigations
+
 **Example: Investigate Error Spike**
 
-Spawn an Explore agent with this prompt:
+Spawn an Explore agent with `model: "sonnet"` and this prompt:
 ```
 Investigate errors in the checkout service over the last hour using the lgtm CLI.
 
@@ -238,7 +243,7 @@ Return ONLY the summary, not raw JSON output.
 
 **Example: Service Health Check**
 
-Spawn an Explore agent with this prompt:
+Spawn an Explore agent with `model: "sonnet"` and this prompt:
 ```
 Check health of the payment-service using lgtm CLI.
 
@@ -255,7 +260,7 @@ Return a brief health summary:
 
 **Example: Trace Investigation**
 
-Spawn an Explore agent with this prompt:
+Spawn an Explore agent with `model: "sonnet"` and this prompt:
 ```
 Investigate slow requests in the API gateway using lgtm CLI.
 
