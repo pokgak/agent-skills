@@ -1,6 +1,6 @@
 ---
 name: lgtm
-description: Query observability backends (Loki logs, Prometheus metrics, Tempo traces). Use when user asks about logs, metrics, traces, or debugging production issues. IMPORTANT - Always use subagents with model sonnet to execute queries, never run queries directly.
+description: Query observability backends (Loki logs, Prometheus metrics, Tempo traces). Use when user asks about logs, metrics, traces, or debugging production issues. IMPORTANT - Always use haiku subagents to execute queries, never run queries directly.
 allowed-tools: Bash, Read, Glob, Task
 license: MIT
 ---
@@ -21,7 +21,7 @@ First, discover what's available before querying blindly:
 
 ```
 Task tool call:
-  subagent_type: "general-purpose"
+  subagent_type: "Bash"
   model: "haiku"
   prompt: "Using lgtm CLI, discover available labels and services.
     Run: lgtm loki labels
@@ -30,14 +30,14 @@ Task tool call:
     Return: list of available apps, namespaces, and other relevant labels."
 ```
 
-**Phase 2: INVESTIGATION (sonnet subagent)**
+**Phase 2: INVESTIGATION (haiku subagent)**
 
 After discovery, query with specific filters:
 
 ```
 Task tool call:
-  subagent_type: "general-purpose"
-  model: "sonnet"
+  subagent_type: "Bash"
+  model: "haiku"
   prompt: "Using lgtm CLI, investigate errors in the checkout app in prod namespace.
     <specific queries based on discovery results>
     Return ONLY a concise summary."
@@ -46,8 +46,8 @@ Task tool call:
 ### Orchestrator Pattern
 
 - **Opus (you)**: Coordinate discovery → investigation flow. Evaluate summaries, decide next steps. NEVER execute queries.
-- **Haiku subagent**: Fast discovery - labels, metrics, tags. Returns what's available.
-- **Sonnet subagent**: Deep investigation - log queries, trace analysis. Returns summarized findings.
+- **Haiku subagent**: All query execution - discovery, investigation, analysis. Fast and sufficient for most tasks.
+- **Sonnet subagent**: Reserved for complex multi-signal correlation or deep root cause analysis (user must explicitly request).
 
 ### Parallel Execution
 
@@ -225,7 +225,7 @@ lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
 
 **Example: Discovery (run this FIRST)**
 
-Use Task tool with `subagent_type: "general-purpose"` and `model: "haiku"`:
+Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 ```
 Discover available observability data using lgtm CLI.
 
@@ -243,7 +243,7 @@ Return a concise list:
 
 **Example: Investigate Error Spike (after discovery)**
 
-Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
+Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 ```
 Investigate errors in the checkout service over the last hour using the lgtm CLI.
 
@@ -263,7 +263,7 @@ Return ONLY the summary, not raw JSON output.
 
 **Example: Service Health Check**
 
-Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
+Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 ```
 Check health of the payment-service using lgtm CLI.
 
@@ -280,7 +280,7 @@ Return a brief health summary:
 
 **Example: Trace Investigation**
 
-Use Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
+Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 ```
 Investigate slow requests in the API gateway using lgtm CLI.
 
