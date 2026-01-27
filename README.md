@@ -28,12 +28,7 @@ Find slow traces over 1 second from the payment service
 
 ## CLI
 
-This repo includes a standalone [LGTM CLI](src/lgtm_cli/) for querying observability backends directly.
-
-```bash
-uv tool install git+https://github.com/pokgak/agent-skills
-lgtm --help
-```
+The LGTM skill uses a standalone CLI for querying observability backends. See [pokgak/lgtm-cli](https://github.com/pokgak/lgtm-cli) for installation and usage.
 
 ## Skill Structure
 

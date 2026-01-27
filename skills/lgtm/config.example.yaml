@@ -76,3 +76,79 @@ instances:
   #   tempo:
   #     url: "https://tempo.us-east-1.example.com"
   #     token: "${AWS_TEMPO_TOKEN}"
+
+  # ============================================================================
+  # Kubernetes Port-Forward Examples
+  # ============================================================================
+  # For services running inside Kubernetes clusters that are not exposed
+  # externally, use port-forwarding to access them locally.
+  #
+  # The `portForward` block tells the agent how to establish the tunnel:
+  #   - context: Kubernetes context name (from ~/.kube/config)
+  #   - namespace: Namespace where the service runs
+  #   - service: Service name to forward to
+  #   - localPort: Local port to listen on
+  #   - remotePort: Service port to forward to
+  #
+  # Before querying, the agent should run:
+  #   kubectl port-forward -n <namespace> svc/<service> <localPort>:<remotePort> --context <context>
+  # ============================================================================
+
+  # Kubernetes cluster with Victoria Metrics (port-forward required)
+  # sandbox-cluster:
+  #   prometheus:
+  #     url: "http://localhost:8428"
+  #     portForward:
+  #       context: "sandbox"                    # kubectl context name
+  #       namespace: "monitoring"               # namespace of the service
+  #       service: "victoria-metrics-server"    # service name
+  #       localPort: 8428                       # local port to bind
+  #       remotePort: 8428                      # service port to forward
+
+  # Kubernetes cluster with full LGTM stack (multiple port-forwards)
+  # k8s-monitoring:
+  #   loki:
+  #     url: "http://localhost:3100"
+  #     portForward:
+  #       context: "production"
+  #       namespace: "monitoring"
+  #       service: "loki-gateway"
+  #       localPort: 3100
+  #       remotePort: 80
+  #   prometheus:
+  #     url: "http://localhost:9090"
+  #     portForward:
+  #       context: "production"
+  #       namespace: "monitoring"
+  #       service: "prometheus-server"
+  #       localPort: 9090
+  #       remotePort: 80
+  #   tempo:
+  #     url: "http://localhost:3200"
+  #     portForward:
+  #       context: "production"
+  #       namespace: "monitoring"
+  #       service: "tempo-query-frontend"
+  #       localPort: 3200
+  #       remotePort: 3200
+
+  # Multiple clusters example - staging vs production
+  # staging-cluster:
+  #   prometheus:
+  #     url: "http://localhost:9091"           # Use different local port to avoid conflicts
+  #     portForward:
+  #       context: "staging"
+  #       namespace: "monitoring"
+  #       service: "prometheus-server"
+  #       localPort: 9091
+  #       remotePort: 80
+  #
+  # production-cluster:
+  #   prometheus:
+  #     url: "http://localhost:9092"
+  #     portForward:
+  #       context: "production"
+  #       namespace: "monitoring"
+  #       service: "prometheus-server"
+  #       localPort: 9092
+  #       remotePort: 80

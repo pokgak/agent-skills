@@ -63,7 +63,7 @@ The following commands are for subagents to execute, NOT for direct use in main 
 
 The CLI should be available via:
 ```bash
-uvx --from git+https://github.com/pokgak/skills-lgtm lgtm --help
+uvx --from git+https://github.com/pokgak/lgtm-cli lgtm --help
 ```
 
 ### Configuration
@@ -180,6 +180,62 @@ lgtm -i production loki query '{app="api"}'
 
 # List configured instances
 lgtm instances
+```
+
+## Kubernetes Port-Forward Instances
+
+Some instances require kubectl port-forwarding to access services inside Kubernetes clusters.
+
+### Check if Port-Forward is Required
+
+```bash
+# List all instances and their port-forward requirements
+lgtm instances
+
+# Show port-forward commands for all instances that need them
+lgtm port-forward
+
+# Show port-forward command for specific instance
+lgtm -i sandbox port-forward
+```
+
+### Using Port-Forward Instances
+
+Before querying an instance that requires port-forwarding, start the tunnel:
+
+```bash
+# 1. Get the port-forward command
+lgtm -i sandbox port-forward
+# Output: kubectl port-forward -n monitoring svc/victoria-metrics-server 8428:8428 --context sandbox
+
+# 2. Start the tunnel (in background or separate terminal)
+kubectl port-forward -n monitoring svc/victoria-metrics-server 8428:8428 --context sandbox &
+
+# 3. Query the instance
+lgtm -i sandbox prom query 'up'
+```
+
+### Subagent Prompt Example for Port-Forward Instances
+
+When querying instances that require port-forwarding:
+
+```
+Task tool call:
+  subagent_type: "Bash"
+  model: "haiku"
+  prompt: "Query sandbox cluster metrics using lgtm CLI.
+
+    1. First check if port-forward is needed:
+       uvx --from git+https://github.com/pokgak/lgtm-cli lgtm -i sandbox port-forward
+
+    2. If port-forward is needed, start it in background:
+       kubectl port-forward -n monitoring svc/victoria-metrics-server 8428:8428 --context sandbox &
+       sleep 2  # Wait for tunnel to establish
+
+    3. Run the query:
+       uvx --from git+https://github.com/pokgak/lgtm-cli lgtm -i sandbox prom query 'sandbox_running_count'
+
+    4. Return a summary of the results."
 ```
 
 ## Best Practices Workflow
