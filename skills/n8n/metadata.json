@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "organization": "pokgak",
+  "date": "2025-01-27",
+  "abstract": "Manage n8n workflows and troubleshoot executions from the command line.",
+  "references": [
+    "https://docs.n8n.io/api/",
+    "https://github.com/pokgak/n8n-cli"
+  ]
+}
