@@ -110,6 +110,16 @@ uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "
 
 # Rename a node
 uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "old name" --rename "new name"
+
+# Set node parameter (supports dot notation for nested keys)
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "HTTP Request" --set-param url="https://api.example.com"
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "Agent" --set-param options.systemMessage="You are helpful"
+
+# Set multiple parameters at once
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "Node" -p timeout=5000 -p retries=3
+
+# Bulk update parameters from JSON (deep merged)
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "Node" --set-param-json '{"options": {"systemMessage": "Hello"}}'
 ```
 
 ### Export/Import Code Nodes
@@ -176,6 +186,28 @@ uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py retry <execution_id>
 
 # Use latest workflow version
 uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py retry <execution_id> --latest
+```
+
+### Credentials Management
+
+**Note:** The n8n API does not allow reading credential values (security restriction). You can only list credentials metadata, create new credentials, and delete credentials. To update a credential, you must delete and recreate it.
+
+```bash
+# List all credentials (metadata only - id, name, type)
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py credentials
+
+# Get schema for a credential type (shows required fields)
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py credential-schema httpHeaderAuth
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py credential-schema openAiApi --json
+
+# Create a credential
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py create-credential --name "My API Key" --type httpHeaderAuth --data '{"name": "X-API-Key", "value": "secret"}'
+
+# Create from file
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py create-credential --name "OpenAI" --type openAiApi --data-file credentials.json
+
+# Delete a credential
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py delete-credential <credential_id>
 ```
 
 ## Common Workflows
