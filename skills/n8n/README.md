@@ -2,6 +2,12 @@
 
 A skill for AI coding assistants to manage n8n workflows and troubleshoot executions.
 
+## Installation
+
+```bash
+npx @anthropic-ai/claude-code skills add pokgak/agent-skills/skills/n8n
+```
+
 ## Overview
 
 This skill enables managing n8n workflows using the `n8n-cli` CLI tool - list workflows, edit nodes, trigger webhooks, and debug failed executions.

@@ -2,6 +2,12 @@
 
 A skill for AI coding assistants to query observability backends: Loki (logs), Prometheus/Mimir (metrics), and Tempo (traces).
 
+## Installation
+
+```bash
+npx @anthropic-ai/claude-code skills add pokgak/agent-skills/skills/lgtm
+```
+
 ## Overview
 
 This skill enables querying the Grafana LGTM stack using the `lgtm` CLI with built-in best practices for context efficiency.
