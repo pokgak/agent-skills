@@ -7,6 +7,42 @@ license: MIT
 
 # n8n Skill - Manage Workflows and Executions
 
+## n8n Concepts
+
+### Workflows
+A workflow is an automation that connects multiple services/apps. It consists of:
+- **Nodes** - Individual steps that perform actions (HTTP requests, code execution, integrations)
+- **Connections** - Links between nodes defining data flow
+- **Triggers** - How the workflow starts (webhook, schedule, manual, etc.)
+
+### Node Types
+- **Trigger nodes** - Start workflows (Webhook, Schedule, Manual)
+- **Regular nodes** - Process data (HTTP Request, Set, IF, Switch)
+- **Code nodes** - Custom JavaScript/Python logic
+- **Integration nodes** - Connect to services (Slack, Discord, Notion, etc.)
+
+### Executions
+An execution is a single run of a workflow. States:
+- **success** - Completed without errors
+- **error** - Failed at some node
+- **running** - Currently executing
+- **waiting** - Paused, waiting for external event
+- **canceled** - Manually stopped
+
+### Execution Modes
+- **webhook** - Triggered by HTTP request
+- **trigger** - Triggered by schedule or event
+- **manual** - Triggered manually from UI
+- **retry** - Retried from a failed execution
+
+### Webhooks
+HTTP endpoints that trigger workflows:
+- **Production webhook** - `/webhook/<path>` - Always active when workflow is active
+- **Test webhook** - `/webhook-test/<path>` - For testing, shows data in UI
+
+### Credentials
+Stored authentication for services (API keys, OAuth tokens). Referenced by nodes but not exposed in workflow JSON.
+
 ## CLI Setup
 
 The CLI is available via uvx (no installation needed):
@@ -191,3 +227,46 @@ uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py trigger "Workflow Na
 # Check execution result
 uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions --workflow <id> -n 1
 ```
+
+## Execution Data Structure
+
+When debugging with `--data --json`, the execution contains:
+
+```
+execution
+├── id                    # Execution ID
+├── status                # success, error, running, etc.
+├── mode                  # webhook, trigger, manual, retry
+├── startedAt / stoppedAt # Timestamps
+├── workflowData          # Snapshot of workflow at execution time
+│   ├── name
+│   ├── nodes[]
+│   └── connections
+└── data
+    └── resultData
+        ├── runData       # Output from each node
+        │   └── [nodeName][]
+        │       ├── data.main[][] # Node output items
+        │       └── executionStatus
+        ├── lastNodeExecuted
+        └── error         # If failed
+            ├── message
+            ├── description
+            └── node      # Which node failed
+```
+
+## Common Error Patterns
+
+### Webhook Payload Issues
+- Check `execution --data --json` and look at the Webhook node's output
+- Payload is in `runData.Webhook[0].data.main[0][0].json.body`
+
+### Code Node Errors
+- Error message shows the JavaScript error
+- Use `node <workflow_id> "node name" --code` to view the code
+- Common: undefined variables, JSON parsing, missing fields
+
+### Integration Failures
+- Usually credential or API issues
+- Check if the service is accessible
+- Verify credential permissions
