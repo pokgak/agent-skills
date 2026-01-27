@@ -10,6 +10,12 @@ Query observability backends (Loki logs, Prometheus/Mimir metrics, Tempo traces)
 
 **Use when:** Debugging production issues, investigating errors, analyzing metrics, tracing requests.
 
+### [n8n](skills/n8n/)
+
+Manage n8n workflows and troubleshoot executions. Supports workflow CRUD, node editing, credential management, and execution debugging.
+
+**Use when:** Working with n8n workflows, webhook triggers, execution errors, or editing workflow nodes.
+
 ## Installation
 
 ```bash
@@ -28,7 +34,10 @@ Find slow traces over 1 second from the payment service
 
 ## CLI
 
-The LGTM skill uses a standalone CLI for querying observability backends. See [pokgak/lgtm-cli](https://github.com/pokgak/lgtm-cli) for installation and usage.
+Each skill uses a standalone CLI:
+
+- **LGTM:** [pokgak/lgtm-cli](https://github.com/pokgak/lgtm-cli) - Query observability backends
+- **n8n:** [pokgak/n8n-cli](https://github.com/pokgak/n8n-cli) - Manage n8n workflows and executions
 
 ## Skill Structure
 
