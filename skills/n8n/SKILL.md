@@ -48,7 +48,7 @@ Stored authentication for services (API keys, OAuth tokens). Referenced by nodes
 The CLI is available via uvx (no installation needed):
 
 ```bash
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py --help
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli --help
 ```
 
 ### Environment Variables
@@ -63,63 +63,63 @@ Required:
 
 ```bash
 # List all workflows
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py workflows
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli workflows
 
 # Active workflows only
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py workflows --active
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli workflows --active
 
 # JSON output
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py workflows --json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli workflows --json
 ```
 
 ### Workflow Details
 
 ```bash
 # Get workflow details
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py workflow <workflow_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli workflow <workflow_id>
 
 # Full JSON output
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py workflow <workflow_id> --json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli workflow <workflow_id> --json
 ```
 
 ### Activate/Deactivate Workflows
 
 ```bash
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py activate <workflow_id>
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py deactivate <workflow_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli activate <workflow_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli deactivate <workflow_id>
 ```
 
 ### List Nodes in Workflow
 
 ```bash
 # List all nodes (Code nodes marked with *)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py nodes <workflow_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli nodes <workflow_id>
 ```
 
 ### View/Edit Nodes
 
 ```bash
 # View node details
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "node name"
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "node name"
 
 # View Code node's JavaScript
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "node name" --code
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "node name" --code
 
 # Update Code node from file
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "node name" --set-code script.js
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "node name" --set-code script.js
 
 # Rename a node
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "old name" --rename "new name"
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "old name" --rename "new name"
 
 # Set node parameter (supports dot notation for nested keys)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "HTTP Request" --set-param url="https://api.example.com"
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "Agent" --set-param options.systemMessage="You are helpful"
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "HTTP Request" --set-param url="https://api.example.com"
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "Agent" --set-param options.systemMessage="You are helpful"
 
 # Set multiple parameters at once
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "Node" -p timeout=5000 -p retries=3
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "Node" -p timeout=5000 -p retries=3
 
 # Bulk update parameters from JSON (deep merged)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "Node" --set-param-json '{"options": {"systemMessage": "Hello"}}'
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "Node" --set-param-json '{"options": {"systemMessage": "Hello"}}'
 ```
 
 ### Export/Import Code Nodes
@@ -128,64 +128,64 @@ Useful for editing Code node scripts in a proper editor:
 
 ```bash
 # Export all Code nodes to files
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py export-code <workflow_id> ./nodes/
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli export-code <workflow_id> ./nodes/
 
 # Import updated scripts back
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py import-code <workflow_id> ./nodes/
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli import-code <workflow_id> ./nodes/
 ```
 
 ### Trigger Workflows
 
 ```bash
 # Trigger workflow by name via webhook
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py trigger "Workflow Name"
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli trigger "Workflow Name"
 
 # With JSON payload
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py trigger "Workflow Name" --data '{"key": "value"}'
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli trigger "Workflow Name" --data '{"key": "value"}'
 
 # With payload from file
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py trigger "Workflow Name" --file payload.json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli trigger "Workflow Name" --file payload.json
 
 # Use test webhook URL
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py trigger "Workflow Name" --test
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli trigger "Workflow Name" --test
 ```
 
 ### List Executions
 
 ```bash
 # Recent executions
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli executions
 
 # Filter by workflow
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions --workflow <workflow_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli executions --workflow <workflow_id>
 
 # Filter by status (error, success, running, waiting, canceled)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions --status error
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli executions --status error
 
 # Limit results
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions -n 100
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli executions -n 100
 ```
 
 ### Execution Details
 
 ```bash
 # Get execution details (shows error info for failed executions)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py execution <execution_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli execution <execution_id>
 
 # Include full execution data
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py execution <execution_id> --data
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli execution <execution_id> --data
 
 # JSON output
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py execution <execution_id> --data --json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli execution <execution_id> --data --json
 ```
 
 ### Retry Failed Execution
 
 ```bash
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py retry <execution_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli retry <execution_id>
 
 # Use latest workflow version
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py retry <execution_id> --latest
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli retry <execution_id> --latest
 ```
 
 ### Credentials Management
@@ -194,20 +194,20 @@ uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py retry <execution_id>
 
 ```bash
 # List all credentials (metadata only - id, name, type)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py credentials
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli credentials
 
 # Get schema for a credential type (shows required fields)
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py credential-schema httpHeaderAuth
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py credential-schema openAiApi --json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli credential-schema httpHeaderAuth
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli credential-schema openAiApi --json
 
 # Create a credential
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py create-credential --name "My API Key" --type httpHeaderAuth --data '{"name": "X-API-Key", "value": "secret"}'
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli create-credential --name "My API Key" --type httpHeaderAuth --data '{"name": "X-API-Key", "value": "secret"}'
 
 # Create from file
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py create-credential --name "OpenAI" --type openAiApi --data-file credentials.json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli create-credential --name "OpenAI" --type openAiApi --data-file credentials.json
 
 # Delete a credential
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py delete-credential <credential_id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli delete-credential <credential_id>
 ```
 
 ## Common Workflows
@@ -216,48 +216,48 @@ uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py delete-credential <c
 
 ```bash
 # 1. Find failed executions
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions --status error
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli executions --status error
 
 # 2. Get error details
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py execution <id>
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli execution <id>
 
 # 3. Get full data for debugging
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py execution <id> --data --json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli execution <id> --data --json
 ```
 
 ### Edit Code Nodes
 
 ```bash
 # 1. Export all Code nodes
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py export-code <workflow_id> ./nodes/
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli export-code <workflow_id> ./nodes/
 
 # 2. Edit scripts in your editor
 # Files: ./nodes/node_name.js
 
 # 3. Import changes back
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py import-code <workflow_id> ./nodes/
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli import-code <workflow_id> ./nodes/
 ```
 
 ### Quick Node Update
 
 ```bash
 # View current code
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "node name" --code > script.js
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "node name" --code > script.js
 
 # Edit script.js...
 
 # Update node
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py node <workflow_id> "node name" --set-code script.js
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli node <workflow_id> "node name" --set-code script.js
 ```
 
 ### Test Webhook Workflow
 
 ```bash
 # Trigger with test payload
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py trigger "Workflow Name" --test --file test_payload.json
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli trigger "Workflow Name" --test --file test_payload.json
 
 # Check execution result
-uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli.py executions --workflow <id> -n 1
+uvx --from git+https://github.com/pokgak/n8n-cli n8n-cli executions --workflow <id> -n 1
 ```
 
 ## Execution Data Structure
