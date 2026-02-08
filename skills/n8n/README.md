@@ -10,7 +10,7 @@ npx @anthropic-ai/claude-code skills add pokgak/agent-skills/skills/n8n
 
 ## Overview
 
-This skill enables managing n8n workflows using the `n8n-cli` CLI tool - list workflows, edit nodes, trigger webhooks, and debug failed executions.
+This skill enables managing n8n workflows using the `n8n-client` CLI tool - list workflows, edit nodes, trigger webhooks, and debug failed executions.
 
 ## Structure
 
@@ -45,4 +45,5 @@ Get your API key from n8n: Settings → n8n API → Create API Key
 ## References
 
 - [n8n API Documentation](https://docs.n8n.io/api/)
-- [n8n-cli Repository](https://github.com/pokgak/n8n-cli)
+- [n8n-client Repository](https://github.com/pokgak/n8n-client)
+- [n8n-client on PyPI](https://pypi.org/project/n8n-client/)
