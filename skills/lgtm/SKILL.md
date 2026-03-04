@@ -1,23 +1,30 @@
 ---
 name: lgtm
-description: Query observability backends (Loki logs, Prometheus metrics, Tempo traces). Use when user asks about logs, metrics, traces, or debugging production issues. IMPORTANT - Always use haiku subagents to execute queries, never run queries directly.
+description: Query observability backends (Loki logs, Prometheus/Mimir metrics, Tempo traces) to investigate production issues, debug errors, check service health, and analyze system behavior. Use this skill whenever the user asks about logs, metrics, traces, error rates, latency, or debugging anything in production — even if they don't say "lgtm" or "observability" explicitly.
 allowed-tools: Bash, Read, Glob, Task
 license: MIT
 ---
 
 # LGTM Skill - Query Observability Backends
 
-## ⚠️ CRITICAL: DO NOT RUN QUERIES DIRECTLY
+## Why subagents matter here
 
-**STOP. Before running ANY lgtm command, you MUST spawn a subagent.**
+`lgtm` commands return raw JSON — sometimes thousands of lines. If you run queries directly in the main conversation, you'll flood the context window and make it harder to reason about what actually matters. Haiku subagents are the right tool: they run the queries, distill the results, and hand you back just the signal you need.
 
-Never run `lgtm` commands directly in the main conversation. Raw JSON responses will bloat context.
+The pattern is: **you orchestrate, haiku executes**.
 
-### Required Two-Phase Approach
+## Orchestrator Pattern
 
-**Phase 1: DISCOVERY (haiku subagent)**
+- **You (orchestrator)**: Coordinate the discovery → investigation flow. Evaluate summaries returned by subagents, decide what to query next, synthesize findings for the user. Don't run `lgtm` commands yourself.
+- **Haiku subagent**: All query execution — discovery, investigation, aggregation, analysis. Fast and sufficient for the vast majority of tasks.
 
-First, discover what's available before querying blindly:
+Run independent queries in parallel — spawn multiple Task calls in one message when queries don't depend on each other (e.g., check logs AND metrics AND traces simultaneously).
+
+## Two-Phase Approach
+
+### Phase 1: Discovery
+
+Before querying blindly, discover what's available. This avoids wasted queries against wrong label names or nonexistent services.
 
 ```
 Task tool call:
@@ -27,12 +34,13 @@ Task tool call:
     Run: lgtm loki labels
     Run: lgtm loki label-values app
     Run: lgtm loki label-values namespace
-    Return: list of available apps, namespaces, and other relevant labels."
+    Run: lgtm tempo tag-values service.name
+    Return a concise list of available apps, namespaces, and trace services."
 ```
 
-**Phase 2: INVESTIGATION (haiku subagent)**
+### Phase 2: Investigation
 
-After discovery, query with specific filters:
+With concrete label values in hand, query precisely:
 
 ```
 Task tool call:
@@ -40,184 +48,93 @@ Task tool call:
   model: "haiku"
   prompt: "Using lgtm CLI, investigate errors in the checkout app in prod namespace.
     <specific queries based on discovery results>
-    Return ONLY a concise summary."
+    Return ONLY a concise summary, not raw JSON."
 ```
-
-### Orchestrator Pattern
-
-- **Opus (you)**: Coordinate discovery → investigation flow. Evaluate summaries, decide next steps. NEVER execute queries.
-- **Haiku subagent**: All query execution - discovery, investigation, analysis. Fast and sufficient for most tasks.
-- **Sonnet subagent**: Reserved for complex multi-signal correlation or deep root cause analysis (user must explicitly request).
-
-### Parallel Execution
-
-Run independent queries in parallel - spawn multiple Task calls in one message when queries don't depend on each other (e.g., check logs AND metrics AND traces simultaneously after discovery).
 
 ---
 
-## CLI Reference (FOR SUBAGENTS ONLY)
+## CLI Reference
 
-The following commands are for subagents to execute, NOT for direct use in main conversation.
-
-### Prerequisites
-
-The CLI should be available via:
+`lgtm` is installed globally. Install with:
 ```bash
-uvx --from git+https://github.com/pokgak/lgtm-cli lgtm --help
+uv tool install git+https://github.com/pokgak/lgtm-cli
 ```
-
-### Configuration
 
 Config file: `~/.config/lgtm/config.yaml`
 
 ### Loki (Logs)
 
-### Discovery First
-
 ```bash
-# What labels exist?
+# Discovery
 lgtm loki labels
-
-# What values for a label?
 lgtm loki label-values app
 lgtm loki label-values namespace
-```
 
-### Query Logs
-
-```bash
 # Basic query (defaults: last 15 min, limit 50)
 lgtm loki query '{app="myapp"}'
 
 # Filter for errors
 lgtm loki query '{app="myapp"} |= "error"'
 
-# With custom time range and limit
+# Custom time range and limit
 lgtm loki query '{app="myapp"}' --start 2024-01-15T10:00:00Z --end 2024-01-15T11:00:00Z --limit 100
-```
 
-### Metric Queries (Aggregations)
-
-```bash
-# Count errors - use this to get overview first
+# Aggregations (prefer these over raw log fetches for initial overviews)
 lgtm loki instant 'count_over_time({app="myapp"} |= "error" [5m])'
-
-# Errors by level
 lgtm loki instant 'sum by (level) (count_over_time({app="myapp"} | json [5m]))'
 ```
 
-## Prometheus/Mimir (Metrics)
-
-### Discovery First
+### Prometheus/Mimir (Metrics)
 
 ```bash
-# What labels exist?
+# Discovery
 lgtm prom labels
-
-# What metrics exist?
 lgtm prom label-values __name__
-
-# Metric metadata
 lgtm prom metadata --metric http_requests_total
-```
 
-### Query Metrics
-
-```bash
 # Instant query
 lgtm prom query 'up{job="prometheus"}'
-
-# Rate of requests
 lgtm prom query 'rate(http_requests_total[5m])'
 
 # Range query (defaults: last 15 min, 60s step)
 lgtm prom range 'rate(http_requests_total[5m])'
-
-# Custom time range
 lgtm prom range 'up' --start 2024-01-15T10:00:00Z --end 2024-01-15T11:00:00Z --step 5m
 ```
 
-## Tempo (Traces)
-
-### Discovery First
+### Tempo (Traces)
 
 ```bash
-# What tags exist?
+# Discovery
 lgtm tempo tags
-
-# What services?
 lgtm tempo tag-values service.name
-```
 
-### Search Traces
-
-```bash
-# Search by service (defaults: last 15 min, limit 20)
+# Search (defaults: last 15 min, limit 20)
 lgtm tempo search -q '{resource.service.name="api"}'
-
-# Error traces
 lgtm tempo search -q '{status=error}'
-
-# Slow traces
 lgtm tempo search --min-duration 1s
-
-# Combined filters
 lgtm tempo search -q '{resource.service.name="api" && status=error}' --min-duration 500ms
-```
 
-### Get Specific Trace
-
-```bash
-# When you have a trace ID
+# Get specific trace by ID
 lgtm tempo trace abc123def456
 ```
 
-## Instance Selection
+### Instance Selection
 
 ```bash
-# Use specific instance
-lgtm -i production loki query '{app="api"}'
-
-# List configured instances
-lgtm instances
+lgtm instances                              # list configured instances
+lgtm -i production loki query '{app="api"}' # use specific instance
 ```
 
-## Kubernetes Port-Forward Instances
+### Kubernetes Port-Forward Instances
 
-Some instances require kubectl port-forwarding to access services inside Kubernetes clusters.
-
-### Check if Port-Forward is Required
+Some instances require kubectl port-forwarding to reach services inside a cluster.
 
 ```bash
-# List all instances and their port-forward requirements
-lgtm instances
-
-# Show port-forward commands for all instances that need them
-lgtm port-forward
-
-# Show port-forward command for specific instance
-lgtm -i sandbox port-forward
+lgtm port-forward          # show port-forward commands for all instances that need them
+lgtm -i sandbox port-forward  # show for specific instance
 ```
 
-### Using Port-Forward Instances
-
-Before querying an instance that requires port-forwarding, start the tunnel:
-
-```bash
-# 1. Get the port-forward command
-lgtm -i sandbox port-forward
-# Output: kubectl port-forward -n monitoring svc/victoria-metrics-server 8428:8428 --context sandbox
-
-# 2. Start the tunnel (in background or separate terminal)
-kubectl port-forward -n monitoring svc/victoria-metrics-server 8428:8428 --context sandbox &
-
-# 3. Query the instance
-lgtm -i sandbox prom query 'up'
-```
-
-### Subagent Prompt Example for Port-Forward Instances
-
-When querying instances that require port-forwarding:
+Subagent prompt for port-forward instances:
 
 ```
 Task tool call:
@@ -225,136 +142,22 @@ Task tool call:
   model: "haiku"
   prompt: "Query sandbox cluster metrics using lgtm CLI.
 
-    1. First check if port-forward is needed:
-       uvx --from git+https://github.com/pokgak/lgtm-cli lgtm -i sandbox port-forward
+    1. Check the port-forward command needed:
+       lgtm -i sandbox port-forward
 
-    2. If port-forward is needed, start it in background:
+    2. Start the tunnel in the background:
        kubectl port-forward -n monitoring svc/victoria-metrics-server 8428:8428 --context sandbox &
-       sleep 2  # Wait for tunnel to establish
+       sleep 2  # wait for tunnel to establish
 
     3. Run the query:
-       uvx --from git+https://github.com/pokgak/lgtm-cli lgtm -i sandbox prom query 'sandbox_running_count'
+       lgtm -i sandbox prom query 'sandbox_running_count'
 
     4. Return a summary of the results."
 ```
 
-## Best Practices Workflow
+### Output Formatting
 
-### 1. Discover → Filter → Query
-
-```bash
-# Step 1: What's available?
-lgtm loki labels
-lgtm loki label-values app
-
-# Step 2: Get overview with aggregation
-lgtm loki instant 'sum by (app) (count_over_time({namespace="prod"} |= "error" [15m]))'
-
-# Step 3: Narrow down to specific app
-lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
-```
-
-### 2. Use Specific Identifiers
-
-```bash
-# If you have a trace ID, fetch directly
-lgtm tempo trace abc123def456
-
-# Filter logs by request ID
-lgtm loki query '{app="api"} |= "request_id=abc123"'
-
-# Filter by pod name
-lgtm loki query '{pod="api-server-xyz123"}'
-```
-
-### 3. Aggregations Over Raw Data
-
-```bash
-# BAD: Fetching all error logs
-lgtm loki query '{app="api"} |= "error"'
-
-# GOOD: Count first, then drill down
-lgtm loki instant 'count_over_time({app="api"} |= "error" [5m])'
-```
-
-## Subagent Prompt Examples
-
-**Example: Discovery (run this FIRST)**
-
-Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
-```
-Discover available observability data using lgtm CLI.
-
-1. Get Loki labels: lgtm loki labels
-2. Get app values: lgtm loki label-values app
-3. Get namespace values: lgtm loki label-values namespace
-4. Get Tempo services: lgtm tempo tag-values service.name
-
-Return a concise list:
-- Available apps: [list]
-- Available namespaces: [list]
-- Available services in traces: [list]
-- Any other relevant labels discovered
-```
-
-**Example: Investigate Error Spike (after discovery)**
-
-Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
-```
-Investigate errors in the checkout service over the last hour using the lgtm CLI.
-
-1. First get error counts: lgtm loki instant 'sum by (level) (count_over_time({app="checkout"} | json [1h]))'
-2. If errors found, get sample logs: lgtm loki query '{app="checkout"} |= "error"' --limit 30
-3. Check for related traces: lgtm tempo search -q '{resource.service.name="checkout" && status=error}'
-
-Summarize findings:
-- Total error count and trend (up/down from normal)
-- Top 3 most frequent error messages
-- When the errors started
-- Affected components/pods
-- Any correlated trace IDs for debugging
-
-Return ONLY the summary, not raw JSON output.
-```
-
-**Example: Service Health Check**
-
-Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
-```
-Check health of the payment-service using lgtm CLI.
-
-1. Error rate: lgtm loki instant 'sum(count_over_time({app="payment-service"} |= "error" [15m]))'
-2. Request latency: lgtm prom query 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service="payment"}[5m]))'
-3. Recent errors: lgtm loki query '{app="payment-service"} |= "error"' --limit 10
-
-Return a brief health summary:
-- Status: healthy/degraded/unhealthy
-- Error rate (errors per minute)
-- P95 latency
-- Any critical issues found
-```
-
-**Example: Trace Investigation**
-
-Use Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
-```
-Investigate slow requests in the API gateway using lgtm CLI.
-
-1. Find slow traces: lgtm tempo search -q '{resource.service.name="api-gateway"}' --min-duration 2s --limit 10
-2. For the slowest trace, get details: lgtm tempo trace <traceID>
-3. Check if downstream services are slow: lgtm tempo search -q '{resource.service.name="api-gateway"} >> {duration > 1s}'
-
-Summarize:
-- How many slow requests in the last 15 min
-- Which downstream service is causing delays
-- Common patterns in slow requests
-```
-
-**NEVER paste raw JSON output into the main conversation.** The subagent processes all data and returns only a concise summary. This is critical for maintaining context efficiency.
-
-## Output Formatting
-
-All commands output JSON. Use `jq` for formatting:
+All commands output JSON. Subagents should use `jq` to extract what's relevant rather than returning raw output:
 
 ```bash
 # Extract just log lines
@@ -366,6 +169,96 @@ lgtm prom query 'up' | jq -r '.data.result[] | "\(.metric.instance): \(.value[1]
 # Trace summary
 lgtm tempo search -q '{status=error}' | jq -r '.traces[] | "\(.traceID) | \(.rootServiceName) | \(.durationMs)ms"'
 ```
+
+---
+
+## Subagent Prompt Examples
+
+**Discovery**
+
+```
+Discover available observability data using lgtm CLI.
+
+1. lgtm loki labels
+2. lgtm loki label-values app
+3. lgtm loki label-values namespace
+4. lgtm tempo tag-values service.name
+
+Return a concise list:
+- Available apps: [list]
+- Available namespaces: [list]
+- Available trace services: [list]
+- Any other relevant labels
+```
+
+**Investigate Error Spike**
+
+```
+Investigate errors in the checkout service over the last hour using lgtm CLI.
+
+1. Get error counts: lgtm loki instant 'sum by (level) (count_over_time({app="checkout"} | json [1h]))'
+2. If errors found, sample logs: lgtm loki query '{app="checkout"} |= "error"' --limit 30
+3. Check traces: lgtm tempo search -q '{resource.service.name="checkout" && status=error}'
+
+Summarize:
+- Total error count and trend
+- Top 3 most frequent error messages
+- When errors started
+- Affected components/pods
+- Any correlated trace IDs
+
+Return only the summary, not raw JSON.
+```
+
+**Service Health Check**
+
+```
+Check health of the payment-service using lgtm CLI.
+
+1. Error rate: lgtm loki instant 'sum(count_over_time({app="payment-service"} |= "error" [15m]))'
+2. P95 latency: lgtm prom query 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service="payment"}[5m]))'
+3. Recent errors: lgtm loki query '{app="payment-service"} |= "error"' --limit 10
+
+Return:
+- Status: healthy/degraded/unhealthy
+- Error rate (errors per minute)
+- P95 latency
+- Any critical issues
+```
+
+**Trace Investigation**
+
+```
+Investigate slow requests in the API gateway using lgtm CLI.
+
+1. Find slow traces: lgtm tempo search -q '{resource.service.name="api-gateway"}' --min-duration 2s --limit 10
+2. For the slowest trace: lgtm tempo trace <traceID>
+3. Check downstream: lgtm tempo search -q '{resource.service.name="api-gateway"} >> {duration > 1s}'
+
+Summarize:
+- How many slow requests in the last 15 min
+- Which downstream service is causing delays
+- Common patterns in slow requests
+```
+
+---
+
+## Best Practices
+
+**Aggregations over raw data** — count before you fetch. Pulling all error logs is slow and wasteful; getting a count first tells you whether it's worth digging deeper.
+
+**Use specific identifiers when you have them** — if the user gives you a trace ID, request ID, or pod name, filter on it directly rather than scanning broadly.
+
+**Prefer aggregations for the initial overview:**
+```bash
+# Get the lay of the land first
+lgtm loki instant 'sum by (app) (count_over_time({namespace="prod"} |= "error" [15m]))'
+
+# Then drill into the specific app
+lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
+```
+
+---
 
 ## Reference
 
