@@ -53,11 +53,45 @@ Task tool call:
 
 ---
 
+## Setup: Config File Required
+
+Before querying, check if the config file exists at `~/.config/lgtm/config.yaml`. If it doesn't, **stop and tell the user** to run `lgtm discover` (for Grafana Cloud) or create the config manually.
+
+### Grafana Cloud Auto-Discovery
+
+If the user is on Grafana Cloud, they can auto-generate the config:
+
+```bash
+# Requires a Grafana Cloud Access Policy token with stacks:read scope
+# Create at: Grafana Cloud → Administration → Cloud Access Policies
+GRAFANA_CLOUD_API_TOKEN=glc_xxx lgtm discover
+
+# Preview without writing
+lgtm discover --dry-run
+
+# Discover for a specific org
+lgtm discover --org myorg --token glc_xxx
+
+# Overwrite existing entries
+lgtm discover --overwrite
+```
+
+This generates config entries for all active stacks with Loki, Prometheus, and Tempo endpoints.
+
+### Error Messages
+
+v1.2.0+ shows clean, actionable errors instead of tracebacks:
+- **Nonexistent instance** (`-i nonexistent`): lists available instances
+- **Empty config**: suggests running `lgtm discover`
+- **Unset env vars**: warns when `${VAR_NAME}` references are not set
+
+---
+
 ## CLI Reference
 
 `lgtm` is installed globally. Install with:
 ```bash
-uv tool install git+https://github.com/pokgak/lgtm-cli
+uv tool install lgtm-cli
 ```
 
 Config file: `~/.config/lgtm/config.yaml`
@@ -118,11 +152,13 @@ lgtm tempo search -q '{resource.service.name="api" && status=error}' --min-durat
 lgtm tempo trace abc123def456
 ```
 
-### Instance Selection
+### Instance Selection & Discovery
 
 ```bash
 lgtm instances                              # list configured instances
 lgtm -i production loki query '{app="api"}' # use specific instance
+lgtm discover                               # auto-discover Grafana Cloud stacks
+lgtm discover --dry-run                     # preview without writing config
 ```
 
 ### Kubernetes Port-Forward Instances

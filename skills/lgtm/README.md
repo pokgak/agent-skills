@@ -34,7 +34,9 @@ lgtm/
 
 ## Configuration
 
-Requires config at `~/.config/lgtm/config.yaml`:
+For Grafana Cloud, run `lgtm discover` to auto-generate the config (requires a Grafana Cloud Access Policy token with `stacks:read` scope).
+
+Otherwise, create config manually at `~/.config/lgtm/config.yaml`:
 
 ```yaml
 version: "1"
