@@ -320,23 +320,23 @@ lgtm prom range 'rate(http_request_duration_seconds_bucket[5m])' > /tmp/data.jso
 lgtm chart /tmp/data.json --type heatmap -t "Latency Distribution"
 ```
 
-### Subagent Pattern for Charts
+### Chart Rendering Pattern
 
-When the user asks for a metrics visualization, use a subagent to run the range query and render a chart:
+Charts are for human consumption — always render them directly with the Bash tool so the output goes to the user's terminal, never inside a subagent.
+
+Use subagents to run the queries and save results to a file, then render the chart yourself:
 
 ```
+Step 1 — Subagent fetches data:
 Task tool call:
   subagent_type: "Bash"
   model: "haiku"
-  prompt: "Query metrics and render a chart.
+  prompt: "Run this range query and save the result:
+    lgtm prom range 'rate(http_requests_total[5m])' --step 1m > /tmp/lgtm-chart-data.json
+    Report the file size and number of series in the result."
 
-    1. Run the range query:
-       lgtm prom range 'rate(http_requests_total[5m])' --step 1m > /tmp/lgtm-chart-data.json
-
-    2. Render the chart:
-       lgtm chart /tmp/lgtm-chart-data.json -t 'HTTP Request Rate' --type timeseries
-
-    3. Return the chart output exactly as rendered (preserve formatting and colors)."
+Step 2 — You render the chart directly (Bash tool, not subagent):
+  lgtm chart /tmp/lgtm-chart-data.json -t 'HTTP Request Rate' --type timeseries
 ```
 
 ### CLI Options
