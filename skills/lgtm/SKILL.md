@@ -298,28 +298,31 @@ lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
 
 ## Charts
 
-When the user asks for metrics with visual charts (or you determine a chart would be more useful than raw numbers), use the `lgtm-chart` tool to render ASCII charts in the terminal. Install globally with `npm link` from the skill's `chart/` directory.
+When the user asks for metrics with visual charts (or you determine a chart would be more useful than raw numbers), use `lgtm chart` to render terminal charts. This is built into `lgtm-cli` (v1.4.0+).
 
 ### Chart Types
 
 **timeseries** (default) — Line chart for trends over time
 ```bash
-lgtm prom range 'rate(http_requests_total[5m])' | lgtm-chart -t "Request Rate"
+lgtm prom range 'rate(http_requests_total[5m])' > /tmp/data.json
+lgtm chart /tmp/data.json -t "Request Rate"
 ```
 
 **bar** — Horizontal bars for comparing current values across series
 ```bash
-lgtm prom range 'topk(10, sum by (job)(rate(http_requests_total[5m])))' | lgtm-chart --type bar -t "Top 10 Jobs"
+lgtm prom range 'topk(10, sum by (job)(rate(http_requests_total[5m])))' > /tmp/data.json
+lgtm chart /tmp/data.json --type bar -t "Top 10 Jobs"
 ```
 
 **heatmap** — Intensity grid for histogram bucket distributions over time
 ```bash
-lgtm prom range 'rate(http_request_duration_seconds_bucket[5m])' | lgtm-chart --type heatmap -t "Latency Distribution"
+lgtm prom range 'rate(http_request_duration_seconds_bucket[5m])' > /tmp/data.json
+lgtm chart /tmp/data.json --type heatmap -t "Latency Distribution"
 ```
 
 ### Subagent Pattern for Charts
 
-When the user asks for a metrics visualization, use a subagent to run the range query and pipe it through the chart tool:
+When the user asks for a metrics visualization, use a subagent to run the range query and render a chart:
 
 ```
 Task tool call:
@@ -331,7 +334,7 @@ Task tool call:
        lgtm prom range 'rate(http_requests_total[5m])' --step 1m > /tmp/lgtm-chart-data.json
 
     2. Render the chart:
-       lgtm-chart -f /tmp/lgtm-chart-data.json -t 'HTTP Request Rate' --type timeseries
+       lgtm chart /tmp/lgtm-chart-data.json -t 'HTTP Request Rate' --type timeseries
 
     3. Return the chart output exactly as rendered (preserve formatting and colors)."
 ```
@@ -343,9 +346,7 @@ Options:
   --type         Chart type: timeseries, bar, heatmap (default: timeseries)
   --title, -t    Chart title
   --width, -w    Chart width in columns (default: terminal width or 80)
-  --height, -h   Chart height in rows (default: 15, timeseries only)
-  --no-stats     Hide stats table below chart (timeseries only)
-  --file, -f     Read from file instead of stdin
+  --height       Chart height in rows (default: 20)
 ```
 
 ### When to Use Which Type
