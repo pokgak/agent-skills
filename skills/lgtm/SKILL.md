@@ -296,6 +296,68 @@ lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
 
 ---
 
+## Charts
+
+When the user asks for metrics with visual charts (or you determine a chart would be more useful than raw numbers), use `lgtm chart` to render terminal charts. This is built into `lgtm-cli` (v1.4.0+).
+
+### Chart Types
+
+**timeseries** (default) — Line chart for trends over time
+```bash
+lgtm prom range 'rate(http_requests_total[5m])' > /tmp/data.json
+lgtm chart /tmp/data.json -t "Request Rate"
+```
+
+**bar** — Horizontal bars for comparing current values across series
+```bash
+lgtm prom range 'topk(10, sum by (job)(rate(http_requests_total[5m])))' > /tmp/data.json
+lgtm chart /tmp/data.json --type bar -t "Top 10 Jobs"
+```
+
+**heatmap** — Intensity grid for histogram bucket distributions over time
+```bash
+lgtm prom range 'rate(http_request_duration_seconds_bucket[5m])' > /tmp/data.json
+lgtm chart /tmp/data.json --type heatmap -t "Latency Distribution"
+```
+
+### Chart Rendering Pattern
+
+Charts are for human consumption — always render them directly with the Bash tool so the output goes to the user's terminal, never inside a subagent.
+
+Use subagents to run the queries and save results to a file, then render the chart yourself:
+
+```
+Step 1 — Subagent fetches data:
+Task tool call:
+  subagent_type: "Bash"
+  model: "haiku"
+  prompt: "Run this range query and save the result:
+    lgtm prom range 'rate(http_requests_total[5m])' --step 1m > /tmp/lgtm-chart-data.json
+    Report the file size and number of series in the result."
+
+Step 2 — You render the chart directly (Bash tool, not subagent):
+  lgtm chart /tmp/lgtm-chart-data.json -t 'HTTP Request Rate' --type timeseries
+```
+
+### CLI Options
+
+```
+Options:
+  --type         Chart type: timeseries, bar, heatmap (default: timeseries)
+  --title, -t    Chart title
+  --width, -w    Chart width in columns (default: terminal width or 80)
+  --height       Chart height in rows (default: 20)
+```
+
+### When to Use Which Type
+
+- **timeseries**: Range queries over time, trend analysis, multi-series comparison
+- **bar**: Top-K comparisons, current value rankings, instant query results
+- **heatmap**: Histogram bucket distributions (le-labeled series), latency analysis
+- **Tables/text**: Single values, label discovery, instant queries with few results
+
+---
+
 ## Reference
 
 For query syntax, see:
