@@ -296,6 +296,60 @@ lgtm loki query '{namespace="prod", app="checkout"} |= "error"' --limit 20
 
 ---
 
+## Timeseries Charts
+
+When the user asks for metrics with visual charts (or you determine a chart would be more useful than raw numbers), use the `lgtm-chart` tool to render ASCII timeseries charts in the terminal.
+
+### Setup
+
+The chart tool is in the skill's `chart/` directory. Run with `npx tsx`:
+
+```bash
+# From the skill directory
+cd <skill-path>/chart
+npx tsx src/cli.tsx -f <file> -t "Chart Title"
+
+# Or pipe from lgtm range query
+lgtm prom range 'rate(http_requests_total[5m])' | npx tsx <skill-path>/chart/src/cli.tsx -t "Request Rate"
+```
+
+### Subagent Pattern for Charts
+
+When the user asks for a metrics visualization, use a subagent to run the range query and pipe it through the chart tool:
+
+```
+Task tool call:
+  subagent_type: "Bash"
+  model: "haiku"
+  prompt: "Query metrics and render a timeseries chart.
+
+    1. Run the range query:
+       lgtm prom range 'rate(http_requests_total[5m])' --step 1m > /tmp/lgtm-chart-data.json
+
+    2. Render the chart:
+       npx tsx <skill-path>/chart/src/cli.tsx -f /tmp/lgtm-chart-data.json -t 'HTTP Request Rate'
+
+    3. Return the chart output exactly as rendered (preserve formatting and colors)."
+```
+
+### Chart CLI Options
+
+```
+Options:
+  --title, -t    Chart title
+  --width, -w    Chart width in columns (default: terminal width or 80)
+  --height, -h   Chart height in rows (default: 15)
+  --no-stats     Hide stats table below chart
+  --file, -f     Read from file instead of stdin
+```
+
+### When to Use Charts vs Tables
+
+- **Charts**: Range queries over time (`lgtm prom range`), trend analysis, comparing series visually
+- **Tables/text**: Instant queries (`lgtm prom query`), single values, label discovery
+
+---
+
 ## Reference
 
 For query syntax, see:
