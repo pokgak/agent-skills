@@ -40,16 +40,39 @@ export function Heatmap({ series, width = 80, title }: Props) {
   // Available width for the heatmap cells
   const cellArea = Math.max(width - labelWidth - 2, 20);
 
-  // Downsample columns if needed
-  const step = Math.max(1, Math.ceil(numCols / cellArea));
-  const displayCols = Math.ceil(numCols / step);
+  // Compute cell width: stretch each data point to fill the available space
+  const cellWidth = Math.max(1, Math.floor(cellArea / numCols));
+  const displayCols = cellWidth * numCols;
+
+  // If data points exceed available space, downsample instead
+  const downsample = numCols > cellArea;
+  const step = downsample ? Math.ceil(numCols / cellArea) : 1;
+  const effectiveCols = downsample ? Math.ceil(numCols / step) : numCols;
+  const effectiveCellWidth = downsample ? 1 : cellWidth;
+  const effectiveDisplayCols = effectiveCols * effectiveCellWidth;
+
+  // Compute per-bucket deltas (like Grafana: subtract lower bucket from upper)
+  // This shows where requests actually fall rather than cumulative counts
+  const isCumulative = detectCumulative(sorted);
+  const deltaValues: number[][] = isCumulative
+    ? sorted.map((s, si) => {
+        if (si === 0) return s.values;
+        return s.values.map((v, vi) => Math.max(0, v - sorted[si - 1].values[vi]));
+      })
+    : sorted.map((s) => s.values);
 
   // Build the value grid and find global min/max for normalization
-  const grid: number[][] = sorted.map((s) => {
+  const grid: number[][] = deltaValues.map((values) => {
     const row: number[] = [];
-    for (let i = 0; i < numCols; i += step) {
-      const slice = s.values.slice(i, Math.min(i + step, numCols));
-      row.push(Math.max(...slice));
+    if (downsample) {
+      for (let i = 0; i < numCols; i += step) {
+        const slice = values.slice(i, Math.min(i + step, numCols));
+        row.push(Math.max(...slice));
+      }
+    } else {
+      for (const v of values) {
+        row.push(v);
+      }
     }
     return row;
   });
@@ -59,7 +82,7 @@ export function Heatmap({ series, width = 80, title }: Props) {
   const globalMin = allVals.length > 0 ? Math.min(...allVals) : 0;
 
   // Build time axis
-  const timeLabels = buildTimeAxis(timestamps, displayCols);
+  const timeLabels = buildTimeAxis(timestamps, effectiveDisplayCols);
 
   return (
     <Box flexDirection="column">
@@ -83,7 +106,7 @@ export function Heatmap({ series, width = 80, title }: Props) {
           <Box key={ri}>
             <Text dimColor>{paddedLabel} </Text>
             <Text>
-              {row.map((v, ci) => cellToString(v, globalMin, globalMax)).join("")}
+              {row.map((v) => cellToString(v, globalMin, globalMax).repeat(effectiveCellWidth)).join("")}
             </Text>
           </Box>
         );
@@ -115,13 +138,33 @@ export function Heatmap({ series, width = 80, title }: Props) {
 function cellToString(value: number, min: number, max: number): string {
   if (value === 0) return " ";
 
-  const range = max - min || 1;
-  const normalized = (value - min) / range;
+  // Use log scale for better contrast on skewed distributions (like Grafana)
+  const logMin = min > 0 ? Math.log1p(min) : 0;
+  const logMax = Math.log1p(max);
+  const logVal = Math.log1p(value);
+  const logRange = logMax - logMin || 1;
+  const normalized = (logVal - logMin) / logRange;
+
   const blockIdx = Math.min(
     Math.floor(normalized * BLOCKS.length),
     BLOCKS.length - 1,
   );
   return BLOCKS[Math.max(1, blockIdx)];
+}
+
+function detectCumulative(sorted: ParsedSeries[]): boolean {
+  // Histogram buckets are cumulative if each bucket's values are >= the previous bucket
+  if (sorted.length < 2) return false;
+  const hasLeBuckets = sorted.some((s) => s.label.includes('le="'));
+  if (!hasLeBuckets) return false;
+
+  // Check a sample of timestamps
+  for (let vi = 0; vi < Math.min(sorted[0].values.length, 5); vi++) {
+    for (let si = 1; si < sorted.length; si++) {
+      if (sorted[si].values[vi] < sorted[si - 1].values[vi]) return false;
+    }
+  }
+  return true;
 }
 
 function extractBucketLabel(label: string): string {
