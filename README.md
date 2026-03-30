@@ -16,6 +16,12 @@ Manage n8n workflows and troubleshoot executions. Supports workflow CRUD, node e
 
 **Use when:** Working with n8n workflows, webhook triggers, execution errors, or editing workflow nodes.
 
+### [linear](skills/linear/)
+
+Interact with Linear issue tracking — list, create, update issues and projects, manage cycles, and add comments.
+
+**Use when:** Working with Linear tickets, triaging issues, updating issue state/assignee/priority, or managing projects and cycles.
+
 ## Installation
 
 ```bash
@@ -38,6 +44,7 @@ Each skill uses a standalone CLI:
 
 - **LGTM:** [pokgak/lgtm-cli](https://github.com/pokgak/lgtm-cli) - Query observability backends
 - **n8n:** [pokgak/n8n-cli](https://github.com/pokgak/n8n-cli) - Manage n8n workflows and executions
+- **linear:** [pokgak/linear-cli](https://github.com/pokgak/linear-cli) - Interact with Linear issue tracking
 
 ## Skill Structure
 

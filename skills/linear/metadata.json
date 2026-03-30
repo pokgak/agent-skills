@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "organization": "pokgak",
+  "date": "2026-03-30",
+  "abstract": "Interact with Linear issue tracking to list, create, update issues and projects, manage cycles, and add comments.",
+  "references": [
+    "https://github.com/pokgak/linear-cli",
+    "https://developers.linear.app/docs/graphql/working-with-the-graphql-api",
+    "https://pokgak.xyz/notes/agent-friendly-cli-design/"
+  ]
+}
