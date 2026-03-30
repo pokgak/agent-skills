@@ -5,7 +5,7 @@ Interact with Linear issue tracking from the command line — list, create, and 
 ## Installation
 
 ```bash
-npx skills add pokgak/linear-cli
+npx skills add pokgak/agent-skills
 ```
 
 ## Requirements
