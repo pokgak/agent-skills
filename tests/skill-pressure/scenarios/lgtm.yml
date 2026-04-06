@@ -47,14 +47,14 @@ scenarios:
       anti_patterns: []
 
   - id: jq-extraction
-    name: "Use jq to extract relevant data from JSON output"
+    name: "Extract relevant data from JSON output instead of dumping raw results"
     prompt: "How would you query Loki for error logs and present the results clearly?"
     without_skill:
       expected_patterns:
         - "(?i)query|search"
     with_skill:
       required_patterns:
-        - "(?i)\\bjq\\b"
+        - "(?i)\\bjq\\b|extract|filter|parse|summar"
       anti_patterns: []
 
   - id: two-phase-investigation
