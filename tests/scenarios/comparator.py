@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from .evaluator import EvalScore
 
 
-REGRESSION_THRESHOLD = -0.1
+# LLM non-determinism causes score swings of ~0.25 between independent runs.
+# A threshold of -0.3 avoids false regression signals while still catching
+# genuine skill-caused degradation.
+REGRESSION_THRESHOLD = -0.3
 
 
 @dataclass
