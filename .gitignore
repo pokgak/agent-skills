@@ -31,6 +31,12 @@ ENV/
 *.swp
 *.swo
 
+# Test output
+tests/scenarios/output/*.ndjson
+tests/scenarios/output/*.stderr
+tests/scenarios/output/*.json
+tests/scenarios/output/*/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,0 +1,18 @@
+[project]
+name = "agent-skills-tests"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "core: core scenario subset for CI",
+    "slow: tests that take a long time to run",
+]
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+]

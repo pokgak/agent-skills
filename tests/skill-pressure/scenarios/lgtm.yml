@@ -1,0 +1,92 @@
+skill: lgtm
+skill_file: skills/lgtm/SKILL.md
+
+scenarios:
+  - id: aggregation-before-raw-fetch
+    name: "Prefer aggregations before fetching raw logs"
+    prompt: "There's an error spike in our checkout service. How would you investigate using Loki logs?"
+    without_skill:
+      expected_patterns:
+        - "(?i)\\b(grep|search|query|fetch)\\b.*\\b(log|error)\\b"
+    with_skill:
+      required_patterns:
+        - "(?i)count_over_time|aggregat|count.*first|overview.*first"
+      anti_patterns: []
+
+  - id: discovery-before-querying
+    name: "Discover available labels before querying"
+    prompt: "I need to check logs for our API service. What's your approach?"
+    without_skill:
+      expected_patterns:
+        - "(?i)query|search|filter"
+    with_skill:
+      required_patterns:
+        - "(?i)labels|discover|label.?values|what.*available"
+      anti_patterns: []
+
+  - id: subagent-orchestrator-pattern
+    name: "Use subagent/Task pattern for queries"
+    prompt: "How would you investigate a latency spike in the payment service using our observability stack (Loki, Prometheus, Tempo)?"
+    without_skill:
+      expected_patterns:
+        - "(?i)query|check|look"
+    with_skill:
+      required_patterns:
+        - "(?i)sub.?agent|task|orchestrat|haiku|parallel"
+      anti_patterns: []
+
+  - id: percentiles-for-latency
+    name: "Use percentiles (P95/P99) not averages for latency"
+    prompt: "Our users are complaining about slow API responses. How would you use Prometheus to understand the latency situation?"
+    without_skill:
+      expected_patterns:
+        - "(?i)\\bavg\\b|\\baverage\\b"
+    with_skill:
+      required_patterns:
+        - "(?i)p95|p99|histogram_quantile|percentile"
+      anti_patterns: []
+
+  - id: jq-extraction
+    name: "Use jq to extract relevant data from JSON output"
+    prompt: "How would you query Loki for error logs and present the results clearly?"
+    without_skill:
+      expected_patterns:
+        - "(?i)query|search"
+    with_skill:
+      required_patterns:
+        - "(?i)\\bjq\\b"
+      anti_patterns: []
+
+  - id: two-phase-investigation
+    name: "Follow two-phase approach: discovery then investigation"
+    prompt: "Something is wrong in production but we're not sure what service is affected. Walk me through how you'd investigate."
+    without_skill:
+      expected_patterns:
+        - "(?i)log|metric|trace"
+    with_skill:
+      required_patterns:
+        - "(?i)(phase|step).*1.*(discover|label|available)|discover.*first|phase 1"
+        - "(?i)(phase|step).*2.*(investigat|query|drill)|then.*(investigat|query|drill)|phase 2"
+      anti_patterns: []
+
+  - id: parallel-independent-queries
+    name: "Run independent queries in parallel"
+    prompt: "I need to check the health of our order-service. I want to see logs, metrics, and traces. How would you do this?"
+    without_skill:
+      expected_patterns:
+        - "(?i)log.*metric.*trace|metric.*log|trace.*log"
+    with_skill:
+      required_patterns:
+        - "(?i)parallel|simultaneous|concurren|at the same time|independent"
+      anti_patterns: []
+
+  - id: chart-for-trends
+    name: "Suggest charts for time-series data"
+    prompt: "I want to understand how our error rate has changed over the past 6 hours. How would you visualize this?"
+    without_skill:
+      expected_patterns:
+        - "(?i)graph|chart|visual|plot|dashboard"
+    with_skill:
+      required_patterns:
+        - "(?i)lgtm chart|timeseries|--type"
+      anti_patterns: []
