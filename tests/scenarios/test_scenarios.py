@@ -108,3 +108,37 @@ class TestScenarios:
             f"Without skill: {comp.without_skill_score:.2f}"
         )
 
+    @pytest.mark.slow
+    @pytest.mark.parametrize("scenario_id", scenario_ids())
+    def test_scenario_with_skill_only(self, scenario_id):
+        """Run scenario with skill only, check minimum score threshold.
+
+        Tests whether the skill is easy enough for Claude to pick up and use.
+        If Claude consistently ignores the skill or doesn't follow its patterns,
+        that's a signal the skill's trigger/instructions need improvement.
+        """
+        scenario = get_scenario(scenario_id)
+        prompt = scenario["prompt"]
+        expected = scenario.get("expected", {})
+        config = scenario.get("config", {})
+        max_turns = config.get("max_turns", 8)
+        timeout = config.get("timeout_ms", 180000) // 1000
+
+        result = run_scenario(
+            scenario_id=scenario_id,
+            prompt=prompt,
+            with_skill=True,
+            max_turns=max_turns,
+            timeout=timeout,
+        )
+        score = evaluate(result, expected)
+
+        assert score.total_score >= 0.6, (
+            f"Score too low for {scenario_id}: {score.total_score:.2f} (min: 0.6)\n"
+            f"Tools used: {[tc.name for tc in result.tool_calls]}\n"
+            f"Skills activated: {result.skills_used}\n"
+            f"Required tools missing: {score.required_tools.get('missing', [])}\n"
+            f"Required patterns missed: {score.required_patterns.get('missed', [])}\n"
+            f"Anti-pattern violations: {score.anti_patterns.get('violations', [])}"
+        )
+
