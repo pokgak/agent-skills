@@ -358,6 +358,98 @@ Options:
 
 ---
 
+## DPM / Billing Investigation
+
+Use this workflow when asked about Grafana Cloud billing spikes, high DPM, or metric cardinality costs.
+
+In Grafana Cloud, **DPM = 1 per active series**. High billing = too many active series. The goal is to find which stack and which metrics are responsible.
+
+### Phase 1: Rank stacks by active series
+
+If the config includes a `grafanacloud-usage` instance (a Grafana Cloud datasource proxy), use it to compare all stacks at once:
+
+```bash
+# Active series per stack — proxy for DPM
+lgtm -i <org>-grafanacloud-usage prom query \
+  'sum by (stack_id) (grafanacloud_instance_active_series)' 2>&1 \
+  | jq -r '.data.result[] | "\(.metric.stack_id) | \(.value[1] | tonumber | floor) series"' \
+  | sort -t'|' -k2 -rn | head -10
+
+# Ingestion rate per stack
+lgtm -i <org>-grafanacloud-usage prom query \
+  'sum by (stack_id) (grafanacloud_instance_samples_per_second)' 2>&1 \
+  | jq -r '.data.result[] | "\(.metric.stack_id) | \(.value[1] | tonumber | floor) samples/sec"' \
+  | sort -t'|' -k2 -rn | head -10
+```
+
+To find **when** DPM spiked, use a range query:
+
+```bash
+lgtm -i <org>-grafanacloud-usage prom range \
+  'sum by (stack_id) (grafanacloud_instance_active_series)' \
+  --start $(date -u -v-30d +%Y-%m-%dT%H:%M:%SZ) \
+  --end $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --step 1d > /tmp/dpm-trend.json 2>&1
+
+# Show first vs last per stack to find biggest growers
+cat /tmp/dpm-trend.json | jq -r '
+  .data.result[] |
+  "\(.metric.stack_id): first=\(.values[0][1] | tonumber | floor) last=\(.values[-1][1] | tonumber | floor) delta=\((.values[-1][1] | tonumber) - (.values[0][1] | tonumber) | floor)"
+' | sort -t= -k4 -rn | head -10
+```
+
+Then render a chart directly (not in subagent):
+```bash
+lgtm chart /tmp/dpm-trend.json -t "Active Series by Stack (30d)" --type timeseries
+```
+
+### Phase 2: Drill into the top stack
+
+Once you know the target stack's lgtm instance name, find which jobs and metrics have the highest cardinality:
+
+```bash
+# Top jobs by series count
+lgtm -i <instance> prom query \
+  'topk(20, count by (job) ({__name__=~".+"}))' 2>&1 \
+  | jq -r '.data.result[] | "\(.metric.job // "unknown") | \(.value[1]) series"' \
+  | sort -t'|' -k2 -rn
+
+# Top metric names by series count
+lgtm -i <instance> prom query \
+  'topk(20, count by (__name__) ({__name__=~".+"}))' 2>&1 \
+  | jq -r '.data.result[] | "\(.metric.__name__) | \(.value[1]) series"' \
+  | sort -t'|' -k2 -rn
+
+# Drill into a specific job
+lgtm -i <instance> prom query \
+  'count by (__name__) ({job="<job_name>"})' 2>&1 \
+  | jq -r '.data.result[] | "\(.metric.__name__) | \(.value[1]) series"' \
+  | sort -t'|' -k2 -rn | head -20
+```
+
+### Phase 3: Find the high-cardinality label
+
+For the top offending metric, check which labels have many unique values:
+
+```bash
+for label in job instance model model_id node k8s_pod_name le; do
+  count=$(lgtm -i <instance> prom query \
+    "count by ($label) (<metric_name>)" 2>/dev/null \
+    | jq '.data.result | length' 2>/dev/null)
+  echo "$label: $count unique values"
+done
+```
+
+High cardinality typically comes from:
+- **`model` / `model_id`** — one value per ML model being served (can reach 100+)
+- **`k8s_pod_name` / `instance`** — one per pod, fine alone but explosive when crossed with other labels
+- **`le`** — histogram bucket boundaries (16+ values) multiplied by all other labels
+- **`request_id` / `trace_id`** — unbounded IDs in labels (anti-pattern, should never be a label)
+
+Common fix: use metric relabeling to drop or aggregate the offending label at scrape time, or replace high-resolution histograms with native histograms.
+
+---
+
 ## Reference
 
 For query syntax, see:
