@@ -441,10 +441,10 @@ done
 ```
 
 High cardinality typically comes from:
-- **`model` / `model_id`** — one value per ML model being served (can reach 100+)
-- **`k8s_pod_name` / `instance`** — one per pod, fine alone but explosive when crossed with other labels
-- **`le`** — histogram bucket boundaries (16+ values) multiplied by all other labels
-- **`request_id` / `trace_id`** — unbounded IDs in labels (anti-pattern, should never be a label)
+- **High-arity application labels** — labels whose values are bounded by something that grows (number of users, jobs, endpoints, etc.)
+- **`k8s_pod_name` / `instance`** — one per pod, fine alone but explosive when crossed with other high-arity labels
+- **`le`** — histogram bucket boundaries multiplied by all other labels
+- **Unbounded ID labels** — request IDs, trace IDs, or any label whose value is unique per event (anti-pattern, should never be a label)
 
 Common fix: use metric relabeling to drop or aggregate the offending label at scrape time, or replace high-resolution histograms with native histograms.
 
