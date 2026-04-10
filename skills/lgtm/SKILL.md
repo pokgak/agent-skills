@@ -472,18 +472,29 @@ for job, count in sorted(rows, key=lambda x: x[1], reverse=True):
 "
 ```
 
-### Phase 3: Find culprit metrics using dpm-finder
+### Phase 3: Find culprit metrics
 
-`lgtm` can't compute per-metric DPM directly — it doesn't iterate over all metric names. Use [dpm-finder](https://github.com/grafana-ps/dpm-finder) for this. It queries `count_over_time(metric[5m])/5` for every metric name and returns a ranked list.
+> **Note for Grafana Cloud / Mimir**: dpm-finder uses `count_over_time(metric[5m])/5` which queries the read API. Grafana Cloud bills on raw ingestion samples *before* any downsampling, so the read API may show lower DPM than what Grafana Cloud actually bills. Use the job-level approach below first; dpm-finder is more useful against self-hosted Prometheus.
 
-**Setup** (one-time): clone and install deps:
+**Job-level DPM** — `scrape_samples_scraped` is the most reliable per-job DPM signal available through the query API. It counts samples collected per scrape, so its rate × 60 = actual DPM per job:
+
 ```bash
-git clone https://github.com/grafana-ps/dpm-finder
-cd dpm-finder && uv sync
+lgtm -i <instance> prom query \
+  'topk(20, sum by (job) (rate(scrape_samples_scraped[5m]) * 60))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), float(r['value'][1]))
+        for r in data['data']['result']]
+for job, dpm in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {dpm:,.0f} DPM')
+"
 ```
 
-**Extract credentials from the lgtm config** for the target instance:
+**Per-metric breakdown using dpm-finder** — run directly from GitHub without cloning using `uv run`:
+
 ```bash
+# Extract credentials for the target instance
 python3 -c "
 import yaml, os, re
 with open(os.path.expanduser('~/.config/lgtm/config.yaml')) as f:
@@ -491,31 +502,30 @@ with open(os.path.expanduser('~/.config/lgtm/config.yaml')) as f:
 inst = cfg['instances']['<instance_name>']['prometheus']
 url = inst['url'].replace('/api/prom', '')
 username = inst.get('username', '')
-token_var = re.sub(r'^\\\${(.+)}\$', r'\1', inst['token'])
-token = os.environ.get(token_var.strip('\${}'), '')
-print(f'PROMETHEUS_ENDPOINT={url}')
-print(f'PROMETHEUS_USERNAME={username}')
-print(f'PROMETHEUS_API_KEY={token[:8]}...')
+token_var = re.sub(r'^\\\${(.+)}\$', r'\1', inst['token']).strip('\${}')
+token = os.environ.get(token_var, '')
+print(f'export PROMETHEUS_ENDPOINT=\"{url}\"')
+print(f'export PROMETHEUS_USERNAME=\"{username}\"')
+print(f'export PROMETHEUS_API_KEY=\"{token}\"')
 "
-```
 
-**Run dpm-finder** (outputs `metric_rates.json` in cwd — run from `/tmp` to keep it tidy):
-```bash
+# Run dpm-finder directly from GitHub — uv resolves deps automatically
 cd /tmp && \
   PROMETHEUS_ENDPOINT="<base_url>" \
   PROMETHEUS_USERNAME="<username>" \
   PROMETHEUS_API_KEY="<token>" \
-  uv run --project /path/to/dpm-finder dpm-finder.py \
-  --format json --min-dpm 1.0 --threads 10 --quiet 2>&1
-```
+  uv run \
+    --with requests \
+    --with python-dotenv \
+    --with prometheus-client \
+    https://raw.githubusercontent.com/grafana-ps/dpm-finder/main/dpm-finder.py \
+    --format json --min-dpm 0 --threads 10 --quiet
 
-**Parse results** — top metrics by DPM:
-```bash
+# Parse results
 python3 -c "
 import json
 data = json.load(open('/tmp/metric_rates.json'))
-print(f'Total metrics above threshold: {data[\"total_metrics_above_threshold\"]}')
-print()
+print(f'Total metrics: {data[\"total_metrics_above_threshold\"]}')
 for m in data['metrics'][:20]:
     print(f'{m[\"metric_name\"]}: {m[\"dpm\"]:.1f} DPM, {m[\"series_count\"]:,} series')
 "
