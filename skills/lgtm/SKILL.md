@@ -369,17 +369,16 @@ In Grafana Cloud, **DPM = 1 per active series**. High billing = too many active 
 If the config includes a `grafanacloud-usage` instance (a Grafana Cloud datasource proxy), use it to compare all stacks at once:
 
 ```bash
-# Active series per stack — proxy for DPM
 lgtm -i <org>-grafanacloud-usage prom query \
   'sum by (stack_id) (grafanacloud_instance_active_series)' 2>&1 \
-  | jq -r '.data.result[] | "\(.metric.stack_id) | \(.value[1] | tonumber | floor) series"' \
-  | sort -t'|' -k2 -rn | head -10
-
-# Ingestion rate per stack
-lgtm -i <org>-grafanacloud-usage prom query \
-  'sum by (stack_id) (grafanacloud_instance_samples_per_second)' 2>&1 \
-  | jq -r '.data.result[] | "\(.metric.stack_id) | \(.value[1] | tonumber | floor) samples/sec"' \
-  | sort -t'|' -k2 -rn | head -10
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('stack_id','?'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for stack, series in sorted(rows, key=lambda x: x[1], reverse=True)[:10]:
+    print(f'{stack}: {series:,} series')
+"
 ```
 
 To find **when** DPM spiked, use a range query:
@@ -391,11 +390,17 @@ lgtm -i <org>-grafanacloud-usage prom range \
   --end $(date -u +%Y-%m-%dT%H:%M:%SZ) \
   --step 1d > /tmp/dpm-trend.json 2>&1
 
-# Show first vs last per stack to find biggest growers
-cat /tmp/dpm-trend.json | jq -r '
-  .data.result[] |
-  "\(.metric.stack_id): first=\(.values[0][1] | tonumber | floor) last=\(.values[-1][1] | tonumber | floor) delta=\((.values[-1][1] | tonumber) - (.values[0][1] | tonumber) | floor)"
-' | sort -t= -k4 -rn | head -10
+python3 -c "
+import json
+data = json.load(open('/tmp/dpm-trend.json'))
+rows = []
+for s in data['data']['result']:
+    vals = s['values']
+    first, last = int(float(vals[0][1])), int(float(vals[-1][1]))
+    rows.append((s['metric'].get('stack_id','?'), first, last, last - first))
+for stack, first, last, delta in sorted(rows, key=lambda x: x[3], reverse=True)[:10]:
+    print(f'{stack}: first={first:,} last={last:,} delta={delta:+,}')
+"
 ```
 
 Then render a chart directly (not in subagent):
@@ -411,20 +416,38 @@ Once you know the target stack's lgtm instance name, find which jobs and metrics
 # Top jobs by series count
 lgtm -i <instance> prom query \
   'topk(20, count by (job) ({__name__=~".+"}))' 2>&1 \
-  | jq -r '.data.result[] | "\(.metric.job // "unknown") | \(.value[1]) series"' \
-  | sort -t'|' -k2 -rn
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for job, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {count:,} series')
+"
 
 # Top metric names by series count
 lgtm -i <instance> prom query \
   'topk(20, count by (__name__) ({__name__=~".+"}))' 2>&1 \
-  | jq -r '.data.result[] | "\(.metric.__name__) | \(.value[1]) series"' \
-  | sort -t'|' -k2 -rn
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('__name__','?'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for name, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{name}: {count:,} series')
+"
 
 # Drill into a specific job
 lgtm -i <instance> prom query \
   'count by (__name__) ({job="<job_name>"})' 2>&1 \
-  | jq -r '.data.result[] | "\(.metric.__name__) | \(.value[1]) series"' \
-  | sort -t'|' -k2 -rn | head -20
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('__name__','?'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for name, count in sorted(rows, key=lambda x: x[1], reverse=True)[:20]:
+    print(f'{name}: {count:,} series')
+"
 ```
 
 ### Phase 3: Find the high-cardinality label
