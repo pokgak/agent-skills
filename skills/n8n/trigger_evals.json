@@ -1,0 +1,22 @@
+{
+  "skill": "n8n",
+  "should_trigger": [
+    "why did my n8n workflow fail?",
+    "edit the invoice webhook workflow in n8n",
+    "add a new node to the data sync workflow",
+    "check the last execution of the email automation",
+    "the n8n webhook isn't triggering, what's wrong?",
+    "list all active n8n workflows",
+    "disable the nightly report workflow",
+    "show me the execution error for workflow 42"
+  ],
+  "should_not_trigger": [
+    "check error rates in Loki",
+    "create a Linear issue",
+    "what's the p99 latency for the API?",
+    "fix this Python bug",
+    "show me the git log",
+    "write a unit test",
+    "check the Prometheus metrics"
+  ]
+}
