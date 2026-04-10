@@ -366,19 +366,22 @@ Use this workflow when asked about Grafana Cloud billing spikes or high DPM.
 
 ### Phase 1: Rank stacks by DPM/series
 
-If the config includes a `grafanacloud-usage` instance (a Grafana Cloud datasource proxy), use it to compare all stacks at once:
+If the config includes a `grafanacloud-usage` instance (a Grafana Cloud datasource proxy), use it to compare all stacks at once. This is the same query the Grafana Cloud "Highest Metrics DPM Stacks" dashboard uses — it joins with `grafanacloud_instance_info` to resolve human-readable stack names:
 
 ```bash
 lgtm -i <org>-grafanacloud-usage prom query \
-  'sum by (stack_id) (grafanacloud_instance_samples_per_second)
-   / sum by (stack_id) (grafanacloud_instance_active_series) * 60' 2>&1 \
+  'sort_desc(max by(id, name) (
+    60 * grafanacloud_instance_samples_per_second
+    / grafanacloud_instance_active_series
+    * on(id) group_left(name) topk by (id) (1, grafanacloud_instance_info)
+  ))' 2>&1 \
   | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
-rows = [(r['metric'].get('stack_id','?'), float(r['value'][1]))
+rows = [(r['metric'].get('name', r['metric'].get('id','?')), float(r['value'][1]))
         for r in data['data']['result']]
-for stack, dpm_per_series in sorted(rows, key=lambda x: x[1], reverse=True)[:10]:
-    print(f'{stack}: {dpm_per_series:.2f} DPM/series (~{60/dpm_per_series:.0f}s scrape interval)')
+for name, dpm_per_series in rows[:10]:
+    print(f'{name}: {dpm_per_series:.2f} DPM/series (~{60/dpm_per_series:.0f}s scrape interval)')
 "
 ```
 
@@ -386,8 +389,11 @@ To find **when** DPM/series spiked, use a range query:
 
 ```bash
 lgtm -i <org>-grafanacloud-usage prom range \
-  'sum by (stack_id) (grafanacloud_instance_samples_per_second)
-   / sum by (stack_id) (grafanacloud_instance_active_series) * 60' \
+  'max by(id, name) (
+    60 * grafanacloud_instance_samples_per_second
+    / grafanacloud_instance_active_series
+    * on(id) group_left(name) topk by (id) (1, grafanacloud_instance_info)
+  )' \
   --start $(date -u -v-30d +%Y-%m-%dT%H:%M:%SZ) \
   --end $(date -u +%Y-%m-%dT%H:%M:%SZ) \
   --step 1d > /tmp/dpm-trend.json 2>&1
@@ -397,11 +403,12 @@ import json
 data = json.load(open('/tmp/dpm-trend.json'))
 rows = []
 for s in data['data']['result']:
+    name = s['metric'].get('name', s['metric'].get('id','?'))
     vals = s['values']
     first, last = float(vals[0][1]), float(vals[-1][1])
-    rows.append((s['metric'].get('stack_id','?'), first, last, last - first))
-for stack, first, last, delta in sorted(rows, key=lambda x: x[3], reverse=True)[:10]:
-    print(f'{stack}: first={first:.2f} last={last:.2f} delta={delta:+.2f} DPM/series')
+    rows.append((name, first, last, last - first))
+for name, first, last, delta in sorted(rows, key=lambda x: x[3], reverse=True)[:10]:
+    print(f'{name}: first={first:.2f} last={last:.2f} delta={delta:+.2f} DPM/series')
 "
 ```
 
@@ -495,22 +502,65 @@ for name, count in sorted(rows, key=lambda x: x[1], reverse=True):
 "
 ```
 
-### Phase 4: Find the high-cardinality label
+Common fix: increase the scrape interval for the offending job in your scrape config.
+
+---
+
+## Cardinality Investigation
+
+High cardinality (too many active series) is a **separate billing dimension** from DPM in Grafana Cloud. Investigate it independently when the billing spike is in active series, not ingestion rate.
+
+### Rank stacks by active series
+
+```bash
+lgtm -i <org>-grafanacloud-usage prom query \
+  'sort_desc(max by(id, name) (
+    grafanacloud_instance_active_series
+    * on(id) group_left(name) topk by (id) (1, grafanacloud_instance_info)
+  ))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('name', r['metric'].get('id','?')), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for name, series in rows[:10]:
+    print(f'{name}: {series:,} series')
+"
+```
+
+### Find high-cardinality jobs and metrics within a stack
+
+```bash
+# Top jobs by series count
+lgtm -i <instance> prom query \
+  'topk(20, count by (job) ({__name__=~".+"}))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for job, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {count:,} series')
+"
+
+# Top metrics by series count within a job
+lgtm -i <instance> prom query \
+  'topk(20, count by (__name__) ({job="<job_name>"}))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('__name__','?'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for name, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{name}: {count:,} series')
+"
+```
+
+### Find the high-cardinality label
 
 For the top offending metric, check which labels have many unique values:
 
 ```bash
-lgtm -i <instance> prom query 'count by (__name__) ({__name__="<metric_name>"})' 2>&1 \
-  | python3 -c "
-import json, sys
-# First get all label names for this metric
-data = json.load(sys.stdin)
-if data['data']['result']:
-    labels = [k for k in data['data']['result'][0]['metric'].keys() if not k.startswith('_')]
-    print('Labels present:', labels)
-"
-
-# Then check cardinality of each label
 for label in job instance node k8s_pod_name le; do
   count=$(lgtm -i <instance> prom query \
     "count by ($label) (<metric_name>)" 2>/dev/null \
@@ -525,7 +575,7 @@ High cardinality typically comes from:
 - **`le`** — histogram bucket boundaries multiplied by all other labels
 - **Unbounded ID labels** — request IDs, trace IDs, or any label whose value is unique per event (anti-pattern, should never be a label)
 
-Common fix: increase the scrape interval for the offending job in your scrape config, use metric relabeling to drop unnecessary labels, or replace high-resolution histograms with native histograms.
+Common fix: use metric relabeling to drop or aggregate the offending label at scrape time, or replace high-resolution histograms with native histograms.
 
 ---
 
