@@ -362,22 +362,44 @@ Options:
 
 Use this workflow when asked about Grafana Cloud billing spikes, high DPM, or metric cardinality costs.
 
-In Grafana Cloud, **DPM = 1 per active series**. High billing = too many active series. The goal is to find which stack and which metrics are responsible.
+**Two distinct questions, two different metrics:**
 
-### Phase 1: Rank stacks by active series
+| Question | Metric | Use when |
+|---|---|---|
+| Who pays the most? (absolute cost) | `samples_per_second × 60` | Total DPM billing investigation |
+| Who scrapes too fast? (rate efficiency) | `samples_per_second / active_series × 60` | Grafana Cloud DPM dashboard shows a stack as "high DPM" |
+
+Grafana Cloud's built-in "Highest Metrics DPM Stacks" dashboard shows **DPM per series** (the scrape rate multiplier above the 1 DPM/series baseline), not total DPM. A stack with 30K series at a 20s scrape interval shows as "3.0 DPM" on that dashboard, even though its absolute cost may be far lower than a stack with 600K series at a 60s interval.
+
+### Phase 1: Rank stacks by DPM
 
 If the config includes a `grafanacloud-usage` instance (a Grafana Cloud datasource proxy), use it to compare all stacks at once:
 
 ```bash
+# Absolute DPM — who pays the most (samples/sec × 60)
 lgtm -i <org>-grafanacloud-usage prom query \
-  'sum by (stack_id) (grafanacloud_instance_active_series)' 2>&1 \
+  'sum by (stack_id) (grafanacloud_instance_samples_per_second * 60)' 2>&1 \
   | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 rows = [(r['metric'].get('stack_id','?'), int(float(r['value'][1])))
         for r in data['data']['result']]
-for stack, series in sorted(rows, key=lambda x: x[1], reverse=True)[:10]:
-    print(f'{stack}: {series:,} series')
+for stack, dpm in sorted(rows, key=lambda x: x[1], reverse=True)[:10]:
+    print(f'{stack}: {dpm:,} DPM')
+"
+
+# DPM per series — who scrapes too frequently (matches Grafana Cloud dashboard)
+lgtm -i <org>-grafanacloud-usage prom query \
+  'sum by (stack_id) (grafanacloud_instance_samples_per_second)
+   / sum by (stack_id) (grafanacloud_instance_active_series) * 60' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('stack_id','?'), float(r['value'][1]))
+        for r in data['data']['result']]
+for stack, dpm_per_series in sorted(rows, key=lambda x: x[1], reverse=True)[:10]:
+    scrape_interval = 60 / dpm_per_series
+    print(f'{stack}: {dpm_per_series:.2f} DPM/series (~{scrape_interval:.0f}s scrape interval)')
 "
 ```
 
@@ -385,7 +407,7 @@ To find **when** DPM spiked, use a range query:
 
 ```bash
 lgtm -i <org>-grafanacloud-usage prom range \
-  'sum by (stack_id) (grafanacloud_instance_active_series)' \
+  'sum by (stack_id) (grafanacloud_instance_samples_per_second * 60)' \
   --start $(date -u -v-30d +%Y-%m-%dT%H:%M:%SZ) \
   --end $(date -u +%Y-%m-%dT%H:%M:%SZ) \
   --step 1d > /tmp/dpm-trend.json 2>&1
@@ -405,7 +427,7 @@ for stack, first, last, delta in sorted(rows, key=lambda x: x[3], reverse=True)[
 
 Then render a chart directly (not in subagent):
 ```bash
-lgtm chart /tmp/dpm-trend.json -t "Active Series by Stack (30d)" --type timeseries
+lgtm chart /tmp/dpm-trend.json -t "DPM by Stack (30d)" --type timeseries
 ```
 
 ### Phase 2: Drill into the top stack
