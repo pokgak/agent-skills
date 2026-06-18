@@ -1,0 +1,25 @@
+{
+  "skill": "lgtm",
+  "should_trigger": [
+    "why are there 5xx errors in the auth service?",
+    "check the error rate for payments in the last hour",
+    "show me logs from the api-gateway service",
+    "is the recommendation service healthy?",
+    "investigate the latency spike we had this morning",
+    "how many requests per second is the checkout service handling?",
+    "trace a slow request through the system",
+    "what's the p99 latency for the user service?",
+    "pull up the logs for the worker that crashed",
+    "debug why the pipeline is timing out"
+  ],
+  "should_not_trigger": [
+    "create a Linear issue for this bug",
+    "add a comment to the ticket",
+    "edit the n8n workflow for the invoice webhook",
+    "fix the bug in this function",
+    "what does this code do?",
+    "write a test for this class",
+    "update the README",
+    "show me the git history"
+  ]
+}

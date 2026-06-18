@@ -1,0 +1,25 @@
+{
+  "skill": "linear",
+  "should_trigger": [
+    "create a Linear issue for this bug",
+    "show me open issues in the current cycle",
+    "what's in the backlog for the platform team?",
+    "assign this ticket to me",
+    "update the priority of issue PLT-123 to urgent",
+    "add a comment to the Linear issue",
+    "what issues are blocked right now?",
+    "create a new project in Linear for the migration",
+    "list all in-progress issues for my team",
+    "triage the issues from last week's sprint"
+  ],
+  "should_not_trigger": [
+    "check the error rate for the auth service",
+    "show me logs from the last hour",
+    "edit the n8n workflow",
+    "fix this bug in my code",
+    "what does this function do?",
+    "run the tests",
+    "deploy to production",
+    "check CPU usage on the server"
+  ]
+}
