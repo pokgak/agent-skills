@@ -1,0 +1,87 @@
+scenarios:
+  - id: investigate-error-spike
+    name: "Investigate an error spike using logs and traces"
+    prompt: "We're seeing a spike in 500 errors from the checkout service in production. Can you investigate what's going on?"
+    expected:
+      required_tools: []
+      required_patterns:
+        - "(?i)lgtm loki"
+        - "(?i)error|5[0-9]{2}"
+        - "(?i)count_over_time|aggregat|count"
+      anti_patterns: []
+      tool_ordering: []
+      recommended_tools:
+        - Skill
+    expected_skills:
+      - lgtm
+    config:
+      max_turns: 8
+      timeout_ms: 180000
+
+  - id: service-health-check
+    name: "Check overall health of a service"
+    prompt: "Can you check the health of our payment-service? I want to know error rates, latency, and any recent issues."
+    expected:
+      required_tools: []
+      required_patterns:
+        - "(?i)lgtm (loki|prom|tempo)"
+        - "(?i)(error|latency|health)"
+      anti_patterns: []
+      recommended_tools:
+        - Skill
+    expected_skills:
+      - lgtm
+    config:
+      max_turns: 10
+      timeout_ms: 180000
+
+  - id: trace-slow-requests
+    name: "Find and investigate slow requests via traces"
+    prompt: "Users are reporting that the API is slow. Can you find slow traces and figure out which downstream service is causing the delay?"
+    expected:
+      required_tools: []
+      required_patterns:
+        - "(?i)lgtm tempo"
+        - "(?i)(duration|slow|latency)"
+      anti_patterns: []
+      recommended_tools:
+        - Skill
+    expected_skills:
+      - lgtm
+    config:
+      max_turns: 8
+      timeout_ms: 180000
+
+  - id: metrics-trend-with-chart
+    name: "Show metrics trend with a chart"
+    prompt: "Show me the request rate trend for our API over the last 2 hours as a chart."
+    expected:
+      required_tools: []
+      required_patterns:
+        - "(?i)lgtm prom range"
+        - "(?i)rate|request"
+      anti_patterns: []
+      recommended_tools:
+        - Bash
+    expected_skills:
+      - lgtm
+    config:
+      max_turns: 8
+      timeout_ms: 180000
+
+  - id: cross-signal-investigation
+    name: "Cross-signal investigation using logs, metrics, and traces"
+    prompt: "Our order processing is failing intermittently. Can you check logs, metrics, and traces to find the root cause?"
+    expected:
+      required_tools: []
+      required_patterns:
+        - "(?i)lgtm loki"
+        - "(?i)lgtm (prom|tempo)"
+      anti_patterns: []
+      recommended_tools:
+        - Skill
+    expected_skills:
+      - lgtm
+    config:
+      max_turns: 12
+      timeout_ms: 240000
