@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "organization": "pokgak",
+  "date": "2026-06-17",
+  "abstract": "Read Cloud SQL for PostgreSQL Query Insights per-query/per-tag metrics programmatically via the Cloud Monitoring API, without a database connection or new infrastructure.",
+  "references": [
+    "https://docs.cloud.google.com/sql/docs/postgres/using-query-insights",
+    "https://docs.cloud.google.com/sql/docs/postgres/admin-api/metrics",
+    "https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/list"
+  ]
+}

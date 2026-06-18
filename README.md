@@ -22,6 +22,12 @@ Interact with Linear issue tracking — list, create, update issues and projects
 
 **Use when:** Working with Linear tickets, triaging issues, updating issue state/assignee/priority, or managing projects and cycles.
 
+### [cloudsql-query-insights](skills/cloudsql-query-insights/)
+
+Read Cloud SQL for PostgreSQL Query Insights data programmatically via the Cloud Monitoring API — the same per-query load/latency data shown in the GCP console, without a database connection.
+
+**Use when:** Finding expensive/slow queries, analyzing query load, or accessing Cloud SQL query stats outside the GCP console.
+
 ## Installation
 
 ```bash
