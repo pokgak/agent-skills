@@ -358,6 +358,256 @@ Options:
 
 ---
 
+## DPM / Billing Investigation
+
+Use this workflow when asked about Grafana Cloud billing spikes or high DPM.
+
+**DPM per series** is the key metric — it's the scrape rate multiplier relative to the 1 DPM/series baseline. A stack at 3.0 DPM/series is scraping every ~20s and being billed 3× what it would cost at 1-minute intervals. Grafana Cloud's built-in "Highest Metrics DPM Stacks" dashboard shows this value. Reducing scrape frequency on high DPM/series stacks cuts billing directly without needing to reduce series count.
+
+### Phase 1: Rank stacks by DPM/series
+
+If the config includes a `grafanacloud-usage` instance (a Grafana Cloud datasource proxy), use it to compare all stacks at once. This is the same query the Grafana Cloud "Highest Metrics DPM Stacks" dashboard uses — it joins with `grafanacloud_instance_info` to resolve human-readable stack names:
+
+```bash
+lgtm -i <org>-grafanacloud-usage prom query \
+  'sort_desc(max by(id, name) (
+    60 * grafanacloud_instance_samples_per_second
+    / grafanacloud_instance_active_series
+    * on(id) group_left(name) topk by (id) (1, grafanacloud_instance_info)
+  ))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('name', r['metric'].get('id','?')), float(r['value'][1]))
+        for r in data['data']['result']]
+for name, dpm_per_series in rows[:10]:
+    print(f'{name}: {dpm_per_series:.2f} DPM/series (~{60/dpm_per_series:.0f}s scrape interval)')
+"
+```
+
+To find **when** DPM/series spiked, use a range query:
+
+```bash
+lgtm -i <org>-grafanacloud-usage prom range \
+  'max by(id, name) (
+    60 * grafanacloud_instance_samples_per_second
+    / grafanacloud_instance_active_series
+    * on(id) group_left(name) topk by (id) (1, grafanacloud_instance_info)
+  )' \
+  --start $(date -u -v-30d +%Y-%m-%dT%H:%M:%SZ) \
+  --end $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --step 1d > /tmp/dpm-trend.json 2>&1
+
+python3 -c "
+import json
+data = json.load(open('/tmp/dpm-trend.json'))
+rows = []
+for s in data['data']['result']:
+    name = s['metric'].get('name', s['metric'].get('id','?'))
+    vals = s['values']
+    first, last = float(vals[0][1]), float(vals[-1][1])
+    rows.append((name, first, last, last - first))
+for name, first, last, delta in sorted(rows, key=lambda x: x[3], reverse=True)[:10]:
+    print(f'{name}: first={first:.2f} last={last:.2f} delta={delta:+.2f} DPM/series')
+"
+```
+
+Then render a chart directly (not in subagent):
+```bash
+lgtm chart /tmp/dpm-trend.json -t "DPM/series by Stack (30d)" --type timeseries
+```
+
+### Phase 2: Find culprit jobs within a stack
+
+Query the stack directly to find which scrape jobs are generating the most samples. `scrape_samples_scraped` counts samples collected per scrape — its rate gives actual DPM per job:
+
+```bash
+# Top jobs by actual DPM (rate of samples scraped × 60)
+lgtm -i <instance> prom query \
+  'topk(20, sum by (job) (rate(scrape_samples_scraped[5m]) * 60))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), float(r['value'][1]))
+        for r in data['data']['result']]
+for job, dpm in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {dpm:,.0f} DPM')
+"
+
+# Scrape interval per job (from scrape duration metric)
+lgtm -i <instance> prom query \
+  'avg by (job) (scrape_interval_seconds)' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), float(r['value'][1]))
+        for r in data['data']['result']]
+for job, interval in sorted(rows, key=lambda x: x[1]):
+    print(f'{job}: {interval:.0f}s scrape interval ({60/interval:.1f} DPM/series)')
+" 2>/dev/null || \
+lgtm -i <instance> prom query \
+  '1 / avg by (job) (rate(scrape_duration_seconds[5m]) / scrape_samples_scraped)' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), float(r['value'][1]))
+        for r in data['data']['result'] if r['value'][1] not in ('Inf','+Inf','-Inf','NaN')]
+for job, rate_per_sec in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: ~{60/rate_per_sec:.0f}s interval')
+"
+```
+
+If `scrape_samples_scraped` is not available, fall back to series count per job:
+
+```bash
+lgtm -i <instance> prom query \
+  'topk(20, count by (job) ({__name__=~".+"}))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for job, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {count:,} series')
+"
+```
+
+### Phase 3: Find culprit metrics
+
+> **Note for Grafana Cloud / Mimir**: dpm-finder uses `count_over_time(metric[5m])/5` which queries the read API. Grafana Cloud bills on raw ingestion samples *before* any downsampling, so the read API may show lower DPM than what Grafana Cloud actually bills. Use the job-level approach below first; dpm-finder is more useful against self-hosted Prometheus.
+
+**Job-level DPM** — `scrape_samples_scraped` is the most reliable per-job DPM signal available through the query API. It counts samples collected per scrape, so its rate × 60 = actual DPM per job:
+
+```bash
+lgtm -i <instance> prom query \
+  'topk(20, sum by (job) (rate(scrape_samples_scraped[5m]) * 60))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), float(r['value'][1]))
+        for r in data['data']['result']]
+for job, dpm in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {dpm:,.0f} DPM')
+"
+```
+
+**Per-metric breakdown using dpm-finder** — run directly from GitHub without cloning using `uv run`:
+
+```bash
+# Extract credentials for the target instance
+python3 -c "
+import yaml, os, re
+with open(os.path.expanduser('~/.config/lgtm/config.yaml')) as f:
+    cfg = yaml.safe_load(f)
+inst = cfg['instances']['<instance_name>']['prometheus']
+url = inst['url'].replace('/api/prom', '')
+username = inst.get('username', '')
+token_var = re.sub(r'^\\\${(.+)}\$', r'\1', inst['token']).strip('\${}')
+token = os.environ.get(token_var, '')
+print(f'export PROMETHEUS_ENDPOINT=\"{url}\"')
+print(f'export PROMETHEUS_USERNAME=\"{username}\"')
+print(f'export PROMETHEUS_API_KEY=\"{token}\"')
+"
+
+# Run dpm-finder directly from GitHub — uv resolves deps automatically
+cd /tmp && \
+  PROMETHEUS_ENDPOINT="<base_url>" \
+  PROMETHEUS_USERNAME="<username>" \
+  PROMETHEUS_API_KEY="<token>" \
+  uv run \
+    --with requests \
+    --with python-dotenv \
+    --with prometheus-client \
+    https://raw.githubusercontent.com/grafana-ps/dpm-finder/main/dpm-finder.py \
+    --format json --min-dpm 0 --threads 10 --quiet
+
+# Parse results
+python3 -c "
+import json
+data = json.load(open('/tmp/metric_rates.json'))
+print(f'Total metrics: {data[\"total_metrics_above_threshold\"]}')
+for m in data['metrics'][:20]:
+    print(f'{m[\"metric_name\"]}: {m[\"dpm\"]:.1f} DPM, {m[\"series_count\"]:,} series')
+"
+```
+
+Common fix: increase the scrape interval for the offending job in your scrape config.
+
+---
+
+## Cardinality Investigation
+
+High cardinality (too many active series) is a **separate billing dimension** from DPM in Grafana Cloud. Investigate it independently when the billing spike is in active series, not ingestion rate.
+
+### Rank stacks by active series
+
+```bash
+lgtm -i <org>-grafanacloud-usage prom query \
+  'sort_desc(max by(id, name) (
+    grafanacloud_instance_active_series
+    * on(id) group_left(name) topk by (id) (1, grafanacloud_instance_info)
+  ))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('name', r['metric'].get('id','?')), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for name, series in rows[:10]:
+    print(f'{name}: {series:,} series')
+"
+```
+
+### Find high-cardinality jobs and metrics within a stack
+
+```bash
+# Top jobs by series count
+lgtm -i <instance> prom query \
+  'topk(20, count by (job) ({__name__=~".+"}))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('job','unknown'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for job, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{job}: {count:,} series')
+"
+
+# Top metrics by series count within a job
+lgtm -i <instance> prom query \
+  'topk(20, count by (__name__) ({job="<job_name>"}))' 2>&1 \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = [(r['metric'].get('__name__','?'), int(float(r['value'][1])))
+        for r in data['data']['result']]
+for name, count in sorted(rows, key=lambda x: x[1], reverse=True):
+    print(f'{name}: {count:,} series')
+"
+```
+
+### Find the high-cardinality label
+
+For the top offending metric, check which labels have many unique values:
+
+```bash
+for label in job instance node k8s_pod_name le; do
+  count=$(lgtm -i <instance> prom query \
+    "count by ($label) (<metric_name>)" 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d['data']['result']))" 2>/dev/null)
+  echo "$label: $count unique values"
+done
+```
+
+High cardinality typically comes from:
+- **High-arity application labels** — labels whose values are bounded by something that grows (number of users, jobs, endpoints, etc.)
+- **`k8s_pod_name` / `instance`** — one per pod, fine alone but explosive when crossed with other high-arity labels
+- **`le`** — histogram bucket boundaries multiplied by all other labels
+- **Unbounded ID labels** — request IDs, trace IDs, or any label whose value is unique per event (anti-pattern, should never be a label)
+
+Common fix: use metric relabeling to drop or aggregate the offending label at scrape time, or replace high-resolution histograms with native histograms.
+
+---
+
 ## Reference
 
 For query syntax, see:
