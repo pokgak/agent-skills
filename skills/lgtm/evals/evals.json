@@ -1,0 +1,42 @@
+{
+  "skill_name": "lgtm",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Which service has the most errors right now? Give me a summary of what's going on.",
+      "expected_output": "A summary identifying the service with the most errors, the error types and frequency, with no raw JSON in the response.",
+      "files": [],
+      "expectations": [
+        "Discovery phase ran before querying (loki labels or label-values called first)",
+        "Response identifies at least one service by name",
+        "Error counts or frequency is mentioned",
+        "Response does not contain raw JSON",
+        "Haiku subagent was used for query execution"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Which service has the worst p95 latency right now?",
+      "expected_output": "A short answer identifying the slowest service and its p95 latency value.",
+      "files": [],
+      "expectations": [
+        "Response identifies at least one service by name",
+        "Response contains a numeric latency value",
+        "Response does not contain raw JSON or PromQL result structures",
+        "Prometheus was queried (prom query or prom range)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find the slowest recent trace across all services and tell me where the time was spent.",
+      "expected_output": "A breakdown of the slowest trace found, showing which services or spans took the most time.",
+      "files": [],
+      "expectations": [
+        "lgtm tempo search was called to find slow traces before fetching a specific trace",
+        "lgtm tempo trace was called with a discovered trace ID",
+        "Response describes which service or span caused the slowness",
+        "Response does not contain raw JSON"
+      ]
+    }
+  ]
+}
